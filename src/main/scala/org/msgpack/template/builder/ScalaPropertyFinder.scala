@@ -21,9 +21,9 @@ import org.msgpack.template.FieldOption
 import collection.immutable.ListMap
 import org.msgpack.annotation.{NotNullable, Optional, Index, Ignore}
 import java.lang.annotation.{ Annotation => JAnnotation}
-import tools.scalap.scalax.rules.scalasig._
 import java.lang.reflect.{Modifier, Field, Method, Type => JType, ParameterizedType}
 import org.msgpack.scalautil.ScalaSigUtil
+import org.msgpack.scalautil.ScalaSigUtil.PropertySet
 
 /**
  * Combination with java reflection and scalap.ScalaSigParser
@@ -35,87 +35,16 @@ trait ScalaPropertyFinder{
 
   self : AbstractTemplateBuilder =>
 
-  type Property = (Method,Method,Field,MethodSymbol)
-  type PropertySet = (String,Property)
   val SetterSuffix = "_$eq"
 
   override def toFieldEntries(targetClass: Class[_], from: FieldOption) : Array[FieldEntry] = {
+    val props = ScalaSigUtil.getAllProperties(targetClass)
 
-
-    /*val sig = ScalaSigParser.parse(targetClass)
-    
-    val (setters,getters) = sig.get.symbols.collect({
-      case m : MethodSymbol => {
-        m.name -> m
-      }
-    }).partition(v => v._1.endsWith(SetterSuffix))
-
-    val getterMap = getters.toMap
-
-    val props = setters.map(s => s._1.substring(0,s._1.length - 4)).
-      filter(fieldName => getterMap.contains(fieldName)).map(fieldName => {
-      fieldName -> getterMap(fieldName)
-    })*/
-
-    val props = ScalaSigUtil.getAllPropGetters(targetClass)
-
-    val propertySetSeq = toPropertySetSeq(targetClass,props)
+    val propertySetSeq = props.filter(ps => !hasAnnotation(ps, classOf[Ignore]))
     val indexed = indexing(propertySetSeq)
 
     indexed.map(convertToScalaFieldEntry(_))
   }
-
-
-  def toPropertySetSeq(targetClass: Class[_],props : Seq[(String,MethodSymbol)]) : Seq[PropertySet] = {
-    val methodMap = targetClass.getMethods().filter(isGetterOrSetter _).groupBy(_.getName)
-    val fieldMap = targetClass.getDeclaredFields.map(f => f.getName -> f).toMap
-
-
-    val propSets = props.map( p => {
-      val getters = methodMap.get(p._1).map(_.toList).getOrElse(Nil)
-      val setters = methodMap.get(p._1 + SetterSuffix).map(_.toList).getOrElse(Nil)
-      if(getters.size < 1 || setters.size < 1){
-        None
-      }else if(getters.size == 1 && setters.size == 1){
-        val getter = getters(0)
-        val setter = setters(0)
-        if(sameType_?(getter ,setter)){
-          Some( p._1 -> (getter,setter,fieldMap.getOrElse(p._1,null),p._2))
-        }else{
-          None
-        }
-      }else {
-        val validPairs = for(getter <- getters;
-             setter <- setters if sameType_?(getter ,setter))
-          yield p._1 -> (getter,setter,fieldMap.getOrElse(p._1,null),p._2)
-        validPairs.headOption
-      }
-    }).collect({
-      case Some(p) => p
-    })
-
-    propSets.filter( ps => {
-      !hasAnnotation(ps,classOf[Ignore])
-    })
-
-  }
-
-  def sameType_?(getter: Method, setter: Method) = {
-    getter.getReturnType == setter.getParameterTypes()(0)
-  }
-
-  def isGetterOrSetter( method : Method) = {
-    Modifier.isPublic(method.getModifiers) && !method.getName.startsWith("_") &&
-    ( (
-        method.getReturnType.getName == "void" &&
-        method.getName.endsWith(SetterSuffix) &&
-        method.getParameterTypes.length == 1
-      ) || (
-        method.getReturnType.getName != "void" &&
-        method.getParameterTypes.length == 0
-      ) )
-  }
-
 
   def indexing(props: Seq[PropertySet]): Array[PropertySet] = {
     val indexed = new Array[PropertySet](props.size)

@@ -22,33 +22,32 @@ import org.msgpack.packer.Packer
 import org.msgpack.template.{AbstractTemplate, TemplateRegistry, Template}
 import org.msgpack.MessageTypeException
 import java.lang.Class
-import java.lang.reflect.{Method, Type}
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/13 11:24
  */
 
-class ReflectionScalaTemplateBuilder(registry : TemplateRegistry)
-  extends ReflectionTemplateBuilder(registry) with ScalaObjectMatcher with ScalaPropertyFinder{
+class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
+  extends ReflectionTemplateBuilder(registry) with ScalaObjectMatcher with ScalaPropertyFinder {
 
   override def buildTemplate[T](targetClass: Class[T], entries: Array[FieldEntry]) = {
-    if(entries == null){
+    if (entries == null) {
       throw new NullPointerException("entries is null: " + targetClass)
     }
     val templates = toScalaTemplates(entries)
-    new ReflectionScalaTemplate[AnyRef](targetClass.asInstanceOf[Class[AnyRef]],templates).asInstanceOf[Template[T]]
+    new ReflectionScalaTemplate[AnyRef](targetClass.asInstanceOf[Class[AnyRef]], templates).asInstanceOf[Template[T]]
   }
 
-  private def toScalaTemplates( entries : Array[FieldEntry]) = {
-    val templates : Array[ReflectionScalaFieldTemplate[_]] = new Array(entries.length)
+  private def toScalaTemplates(entries: Array[FieldEntry]): Array[ReflectionScalaFieldTemplate[AnyRef]] = {
+    val templates: Array[ReflectionScalaFieldTemplate[AnyRef]] = new Array(entries.length)
     var i = 0
-    for( e <- entries){
-      if(e.isAvailable){
+    for (e <- entries) {
+      if (e.isAvailable) {
         val template = registry.lookup(e.getGenericType).asInstanceOf[Template[AnyRef]]
-        templates(i) = new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry],template)
-      }else{
+        templates(i) = new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry], template)
+      } else {
         templates(i) = null
       }
       i += 1
@@ -60,20 +59,20 @@ class ReflectionScalaTemplateBuilder(registry : TemplateRegistry)
 /**
  * Store companion object
  */
-object CompanionObjectMap{
+object CompanionObjectMap {
 
-  type CompanionObject = { def apply() : Any}
+  type CompanionObject = {def apply(): Any}
 
-  var companions = Map[Class[_],CompanionObject]()
+  var companions = Map[Class[_], CompanionObject]()
 
-  def newInstance(clazz : Class[_]) = companions.synchronized{
-    if(companions.contains(clazz)){
+  def newInstance(clazz: Class[_]) = companions.synchronized {
+    if (companions.contains(clazz)) {
       companions(clazz).apply()
-    }else{
-      try{
+    } else {
+      try {
         clazz.newInstance
-      }catch{
-        case e : InstantiationException =>{
+      } catch {
+        case e: InstantiationException => {
           val c = registerCompanionObject(clazz)
           c.apply()
         }
@@ -81,16 +80,16 @@ object CompanionObjectMap{
     }
   }
 
-  def registerCompanionObject(clazz : Class[_]) : CompanionObject = {
-    try{
+  def registerCompanionObject(clazz: Class[_]): CompanionObject = {
+    try {
       val companion = clazz.getClassLoader.loadClass(clazz.getName + "$").getDeclaredField("MODULE$").get(null).asInstanceOf[CompanionObject]
-      companions +=( clazz -> companion)
+      companions += (clazz -> companion)
       companion
-    }catch{
-      case e : ClassNotFoundException => {
+    } catch {
+      case e: ClassNotFoundException => {
         throw new MessageTypeException("Can't find plain constructor or companion object")
       }
-      case e : NoSuchFieldException => {
+      case e: NoSuchFieldException => {
         throw new MessageTypeException("Can't find plain constructor or companion object")
       }
     }
@@ -98,15 +97,15 @@ object CompanionObjectMap{
 
 }
 
-class ReflectionScalaTemplate[T <: AnyRef](var targetClass : Class[T],
-                                           var templates : Array[ReflectionScalaFieldTemplate[_]]) extends AbstractTemplate[T]{
-  def read(unpacker: Unpacker, base: T, required: Boolean) : T = {
+class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
+                                           var templates: Array[ReflectionScalaFieldTemplate[T]]) extends AbstractTemplate[T] {
+  def read(unpacker: Unpacker, base: T, required: Boolean): T = {
     if (!required && unpacker.trySkipNil) {
       return null.asInstanceOf[T]
     }
-    val to : T = if (base == null) {
+    val to: T = if (base == null) {
       CompanionObjectMap.newInstance(targetClass).asInstanceOf[T]
-    }else base
+    } else base
     unpacker.readArrayBegin
     var i: Int = 0
     while (i < templates.length) {
@@ -123,7 +122,8 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass : Class[T],
         }
       }
       ({
-        i += 1; i
+        i += 1;
+        i
       })
     }
     unpacker.readArrayEnd
@@ -131,7 +131,7 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass : Class[T],
   }
 
 
-  def write(packer: Packer, target: T, required: Boolean) : Unit = {
+  def write(packer: Packer, target: T, required: Boolean): Unit = {
     if (target == null) {
       if (required) {
         throw new MessageTypeException("attempted to write null")
@@ -141,18 +141,18 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass : Class[T],
     }
 
     packer.writeArrayBegin(templates.length)
-    for(template <- templates){
-      if(!template.entry.isAvailable){
+    for (template <- templates) {
+      if (!template.entry.isAvailable) {
         packer.writeNil
-      }else{
+      } else {
         val obj = template.entry.get(target).asInstanceOf[T]
-        if(obj == null){
-          if(template.entry.isNotNullable){
+        if (obj == null) {
+          if (template.entry.isNotNullable) {
             throw new MessageTypeException(template.entry.getName + " cannot be null by @NotNullable")
           }
           packer.writeNil()
-        }else{
-          template.asInstanceOf[Template[T]].write(packer,obj,true)
+        } else {
+          template.asInstanceOf[Template[T]].write(packer, obj, true)
         }
       }
     }
@@ -161,18 +161,18 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass : Class[T],
   }
 }
 
-class ReflectionScalaFieldTemplate[T <: AnyRef](val entry : ScalaFieldEntry, template : Template[T]) extends AbstractTemplate[T]{
-  def read(u: Unpacker, to: T, required: Boolean) : T = {
+class ReflectionScalaFieldTemplate[T <: AnyRef](val entry: ScalaFieldEntry, template: Template[T]) extends AbstractTemplate[T] {
+  def read(u: Unpacker, to: T, required: Boolean): T = {
     val f = entry.get(to).asInstanceOf[T]
-    val v = template.read(u,f,required)
-    if( v != f){
-      entry.set(to,v)
+    val v = template.read(u, f, required)
+    if (v != f) {
+      entry.set(to, v)
     }
     return v.asInstanceOf[T]
   }
 
   def write(pk: Packer, v: T, required: Boolean) = {
-    template.write(pk,v,required)
+    template.write(pk, v, required)
   }
 
   override def toString = {

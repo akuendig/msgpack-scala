@@ -1,8 +1,8 @@
 package org.msgpack.scalautil
 
 import java.lang.reflect.{Field, Method, Type => JType, ParameterizedType}
-import tools.scalap.scalax.rules.scalasig._
-import com.sun.xml.internal.ws.api.PropertySet
+import scala.reflect.runtime.{currentMirror => cm}
+import scala.reflect.runtime.universe._
 
 /**
  *
@@ -12,82 +12,87 @@ import com.sun.xml.internal.ws.api.PropertySet
 
 object ScalaSigUtil {
 
+  type Property = (Method, Method, Field, MethodSymbol)
+  type PropertySet = (String, Property)
 
-  val SetterSuffix = "_$eq"
-
-  def getAllPropGetters(clazz : Class[_]) : Seq[(String,MethodSymbol)] = {
+  def getAllProperties(clazz: Class[_]): Seq[PropertySet] = {
 
     def superClassProps = {
       val superClass = clazz.getSuperclass
-      if(superClass == null || superClass == classOf[java.lang.Object]){
+      if (superClass == null || superClass == classOf[java.lang.Object]) {
         Nil
-      }else{
-        getAllPropGetters(superClass)
+      } else {
+        getAllProperties(superClass)
       }
     }
 
     def interfaceProps = {
-      clazz.getInterfaces.foldLeft(Seq[(String,MethodSymbol)]())( (l,i) => l ++ getAllPropGetters(i))
+      clazz.getInterfaces.foldLeft(Seq[PropertySet]())((l, i) => l ++ getAllProperties(i))
     }
 
-    superClassProps ++ interfaceProps ++ getPropGetters(clazz)
-
-
+    superClassProps ++ interfaceProps ++ getDefinedProperties(clazz)
   }
 
-  def getPropGetters(clazz : Class[_]) : Seq[(String,MethodSymbol)] = {
+  def getDefinedProperties(clazz: Class[_]): Seq[PropertySet] = {
+    val tpe = cm.classSymbol(clazz).toType
+    val fieldMap = clazz.getFields.map(f => f.getName -> f).toMap
 
-    val sig = ScalaSigParser.parse(clazz)
+    val properties = tpe.declarations.collect {
+      case m if m.isMethod && m.asMethod.isGetter => {
+        val field = m.asMethod.accessed.asTerm
+        val getter = field.getter.asMethod
+        val setterOpt = Option(field.setter).map(_.asMethod)
 
-    if(sig.isEmpty){
-      return Nil
-    }
+        val javaField = fieldMap(field.name.decoded)
+        val javaGetter = clazz.getMethod(getter.name.encoded)
+        val javaSetterOpt = setterOpt.map(s => clazz.getMethod(s.name.encoded))
 
-    val (setters,getters) = sig.get.symbols.collect({
-      case m : MethodSymbol => {
-        m.name -> m
+        val p: Property = (
+          javaGetter,
+          javaSetterOpt.getOrElse(null),
+          javaField,
+          getter
+          )
+
+        (getter.name.encoded, p)
       }
-    }).partition(v => v._1.endsWith(SetterSuffix))
-    val getterMap = getters.toMap
-    setters.map(s => s._1.substring(0,s._1.length - 4)).
-      filter(fieldName => getterMap.contains(fieldName)).map(fieldName => {
-      fieldName -> getterMap(fieldName)
-    })
+    }
+
+    properties.toSeq
   }
 
-
-  def getReturnType(methodSymbol : MethodSymbol) : Option[JType] = {
-    methodSymbol.infoType match{
+  def getReturnType(methodSymbol: MethodSymbol): Option[JType] = {
+    methodSymbol.returnType match {
       case NullaryMethodType(returnType) => toJavaClass(returnType)
-      case MethodType(returnType,methodParams) => toJavaClass(returnType)
-      case trt : TypeRefType => toJavaClass(trt)
+      case MethodType(methodParams, returnType) => toJavaClass(returnType)
+      case trt: TypeRef => toJavaClass(trt)
       case _ => {
         None
       }
     }
   }
 
-  def toJavaClass( t : Type , primitive_? : Boolean = true) : Option[JType] = t match{
-    case TypeRefType(prefix,clazz , genericParams) => {
-      val nameMapper = if(primitive_?) mapToPrimitiveJavaName else mapToRefJavaName
-      if(clazz.path == "scala.Array"){
-        toJavaClass(genericParams(0),true) match{
-          case Some(c : Class[_]) => if(c.isPrimitive) Some(forName("[" + c.getName.toUpperCase.charAt(0))) else Some(forName("[L" + c.getName + ";"))
-          case Some(c : ParameterizedType) => Some(forName("[L" + c.getRawType + ";"))
+  def toJavaClass(t: Type, primitive_? : Boolean = true): Option[JType] = t match {
+    case TypeRef(pre, sym, genericParams) => {
+      val nameMapper = if (primitive_?) mapToPrimitiveJavaName else mapToRefJavaName
+      if (sym.fullName == "scala.Array") {
+        toJavaClass(genericParams(0), true) match {
+          case Some(c: Class[_]) => if (c.isPrimitive) Some(forName("[" + c.getName.toUpperCase.charAt(0))) else Some(forName("[L" + c.getName + ";"))
+          case Some(c: ParameterizedType) => Some(forName("[L" + c.getRawType + ";"))
           case _ => throw new Exception("Never match here")
         }
-      }else if(clazz.path == "scala.Enumeration.Value"){
-        prefix match{
-          case SingleType(_,name) => {
-            Some(nameMapper(name.path))
+      } else if (sym.fullName == "scala.Enumeration.Value") {
+        pre match {
+          case SingleType(_, name) => {
+            Some(nameMapper(name.fullName))
           }
         }
-      }else if(genericParams.size == 0){
-        Some(nameMapper(clazz.path))
-      }else{
+      } else if (genericParams.size == 0) {
+        Some(nameMapper(sym.fullName))
+      } else {
         Some(new MyParameterizedType(
-          nameMapper(clazz.path),
-          genericParams.map(p => toJavaClass(p,false).get).toArray))
+          nameMapper(sym.fullName),
+          genericParams.map(p => toJavaClass(p, false).get).toArray))
       }
     }
     case _ => {
@@ -95,24 +100,26 @@ object ScalaSigUtil {
     }
 
   }
-  def forName(name : String) = Class.forName(name)
 
-  trait MapToJavaName extends Function1[String, Class[_]]{
-    val nameMap : Map[String,Class[_]]
-    def apply(scalaClassName : String) : Class[_] = {
-      if(scalaClassName.startsWith("scala")){
-        nameMap.getOrElse(scalaClassName,forName(scalaClassName))
-      }else{
-        if(scalaClassName.startsWith("<empty>.")) forName(scalaClassName.substring(8))
+  def forName(name: String) = Class.forName(name)
+
+  trait MapToJavaName extends ((String) => Class[_]) {
+    val nameMap: Map[String, Class[_]]
+
+    def apply(scalaClassName: String): Class[_] = {
+      if (scalaClassName.startsWith("scala")) {
+        nameMap.getOrElse(scalaClassName, forName(scalaClassName))
+      } else {
+        if (scalaClassName.startsWith("<empty>.")) forName(scalaClassName.substring(8))
         else forName(scalaClassName)
       }
     }
   }
 
 
-  val commonNameMaps : Seq[(String, Class[_])] = Seq(
+  val commonNameMaps: Seq[(String, Class[_])] = Seq(
     "scala.Predef.String" -> classOf[java.lang.String],
-    "scala.Predef.Map" -> classOf[Map[_,_]],
+    "scala.Predef.Map" -> classOf[Map[_, _]],
     "scala.Predef.Seq" -> classOf[Seq[_]],
     "scala.Predef.Set" -> classOf[Set[_]],
     "scala.package.List" -> classOf[List[_]],
@@ -121,8 +128,8 @@ object ScalaSigUtil {
     "scala.package.Either" -> classOf[Either[_,_]]
   )
 
-  object mapToRefJavaName extends MapToJavaName{
-    val nameMap =  commonNameMaps ++ Seq(
+  object mapToRefJavaName extends MapToJavaName {
+    val nameMap = commonNameMaps ++ Seq(
       "scala.Int" -> classOf[java.lang.Integer],
       "scala.Byte" -> classOf[java.lang.Byte],
       "scala.Short" -> classOf[java.lang.Short],
@@ -133,8 +140,8 @@ object ScalaSigUtil {
     ) toMap
   }
 
-  object mapToPrimitiveJavaName extends MapToJavaName{
-    val nameMap =  commonNameMaps ++ Seq(
+  object mapToPrimitiveJavaName extends MapToJavaName {
+    val nameMap = commonNameMaps ++ Seq(
       "scala.Int" -> java.lang.Integer.TYPE,
       "scala.Byte" -> java.lang.Byte.TYPE,
       "scala.Short" -> java.lang.Short.TYPE,
@@ -145,35 +152,34 @@ object ScalaSigUtil {
     ) toMap
   }
 
-  def getCompanionObjectClass(clazz:  Class[_]) : Option[Class[_]] = {
-    if(clazz.getName.endsWith("$")) None
-    else{
-      try{
+  def getCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {
+    if (clazz.getName.endsWith("$")) None
+    else {
+      try {
         val c = Class.forName(clazz.getName + "$")
         Some(c)
-      }catch{
-        case e : NoClassDefFoundError => {
+      } catch {
+        case e: NoClassDefFoundError => {
           None
         }
-        case e : ClassNotFoundException =>
-        {
+        case e: ClassNotFoundException => {
           None
         }
       }
     }
   }
-  def reverseCompanionObjectClass(clazz : Class[_]) : Option[Class[_]] = {
-    if(!clazz.getName.endsWith("$")) None
-    else{
-      try{
-        val c = Class.forName(clazz.getName.substring(0,clazz.getName.length - 1))
+
+  def reverseCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {
+    if (!clazz.getName.endsWith("$")) None
+    else {
+      try {
+        val c = Class.forName(clazz.getName.substring(0, clazz.getName.length - 1))
         Some(c)
-      }catch{
-        case e : NoClassDefFoundError => {
+      } catch {
+        case e: NoClassDefFoundError => {
           None
         }
-        case e : ClassNotFoundException =>
-        {
+        case e: ClassNotFoundException => {
           None
         }
       }
@@ -183,7 +189,7 @@ object ScalaSigUtil {
 }
 
 
-class MyParameterizedType(rowClass : Class[_],paramClasses : Array[JType]) extends ParameterizedType{
+class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extends ParameterizedType {
   def getActualTypeArguments: Array[JType] = paramClasses
 
   def getRawType: JType = rowClass
@@ -195,9 +201,9 @@ class MyParameterizedType(rowClass : Class[_],paramClasses : Array[JType]) exten
   }
 }
 
-object MyParameterizedType{
-  def apply(m : Manifest[_]) : MyParameterizedType = {
-    new MyParameterizedType(m.erasure,m.typeArguments.map(MyParameterizedType.apply(_)).toArray)
+object MyParameterizedType {
+  def apply(m: Manifest[_]): MyParameterizedType = {
+    new MyParameterizedType(m.erasure, m.typeArguments.map(MyParameterizedType.apply(_)).toArray)
 
   }
 }
