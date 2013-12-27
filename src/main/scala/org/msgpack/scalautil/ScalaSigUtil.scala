@@ -3,6 +3,7 @@ package org.msgpack.scalautil
 import java.lang.reflect.{Field, Method, Type => JType, ParameterizedType}
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
+import org.slf4j.{LoggerFactory, Logger}
 
 /**
  *
@@ -11,14 +12,17 @@ import scala.reflect.runtime.universe._
  */
 
 object ScalaSigUtil {
+  private val logger : Logger = LoggerFactory.getLogger(getClass)
 
   type Property = (Method, Method, Field, MethodSymbol)
   type PropertySet = (String, Property)
 
+  val SetterSuffix = "_="
+
   def getAllProperties(clazz: Class[_]): Seq[PropertySet] = {
 
     def superClassProps = {
-      val superClass = clazz.getSuperclass
+      val superClass: Class[_] = clazz.getSuperclass
       if (superClass == null || superClass == classOf[java.lang.Object]) {
         Nil
       } else {
@@ -34,29 +38,71 @@ object ScalaSigUtil {
   }
 
   def getDefinedProperties(clazz: Class[_]): Seq[PropertySet] = {
+    logger.debug("Inspecting class {} for defined properties.", clazz.getName)
+
     val tpe = cm.classSymbol(clazz).toType
     val fieldMap = clazz.getFields.map(f => f.getName -> f).toMap
 
-    val properties = tpe.declarations.collect {
-      case m if m.isMethod && m.asMethod.isGetter => {
-        val field = m.asMethod.accessed.asTerm
-        val getter = field.getter.asMethod
-        val setterOpt = Option(field.setter).map(_.asMethod)
+    // Find all zero argument methods, that are public.
+    // Java does not provide info on private methods via reflection.
+    val (zeroArgs, rest) = tpe.declarations.collect {
+      case m if m.isMethod && m.asMethod.isPublic => m.asMethod
+    }.partition(_.paramss.headOption.map(_.size == 0).getOrElse(true))
 
-        val javaField = fieldMap(field.name.decoded)
+    // Build a map to speed up lookup of potential getters
+    val zeroArgsMap = zeroArgs.map(m => m.name.decoded -> m).toMap
+
+    logger.debug("The class contains the following zero argument methods: {}", zeroArgs.map(_.name.decoded))
+
+    // Possible setters are all methods, that take exactly one argument
+    val oneArg = rest.filter(_.paramss.headOption.exists(_.size == 1))
+
+    // Create the list of all setters, which have a getter with the same
+    // name and one parameter with the type of the return type of the getter.
+    val settersWithGetters = for {
+      setter <- oneArg
+
+      // Take the decoded name, i.e. prop_=
+      name = setter.name.decoded
+
+      // Test if the potential setter end with _=
+      if name.endsWith(SetterSuffix)
+
+      // Store the name the getter would have
+      cleanName = name.substring(0, name.length - SetterSuffix.length)
+
+      // See if we have a zero argument method with the same name
+      if zeroArgsMap.contains(cleanName)
+      getter = zeroArgsMap(cleanName)
+
+      // Test if that method has the correct return type
+      if getter.returnType =:= setter.paramss.head.head.typeSignature
+    } yield (cleanName, getter, setter)
+
+    logger.debug("The class contains the following one argument methods: {}", oneArg.map(_.name.decoded))
+
+    // Convert the Scala reflection information into Java reflection information
+    val properties = settersWithGetters.map {
+      case (cleanName, getter, setter) =>
+        val javaField = fieldMap.getOrElse(cleanName, null)
         val javaGetter = clazz.getMethod(getter.name.encoded)
-        val javaSetterOpt = setterOpt.map(s => clazz.getMethod(s.name.encoded))
+        val javaSetter = {
+          val param1 = setter.paramss(0)(0).asTerm
+          val param1Tpe = cm.runtimeClass(param1.typeSignature)
+          clazz.getMethod(setter.name.encoded, param1Tpe)
+        }
 
         val p: Property = (
           javaGetter,
-          javaSetterOpt.getOrElse(null),
+          javaSetter,
           javaField,
           getter
-          )
+        )
 
         (getter.name.encoded, p)
-      }
     }
+
+    logger.debug("The extracted properties are: {}", properties.map(_._1))
 
     properties.toSeq
   }
@@ -66,14 +112,12 @@ object ScalaSigUtil {
       case NullaryMethodType(returnType) => toJavaClass(returnType)
       case MethodType(methodParams, returnType) => toJavaClass(returnType)
       case trt: TypeRef => toJavaClass(trt)
-      case _ => {
-        None
-      }
+      case _ => None
     }
   }
 
   def toJavaClass(t: Type, primitive_? : Boolean = true): Option[JType] = t match {
-    case TypeRef(pre, sym, genericParams) => {
+    case TypeRef(pre, sym, genericParams) =>
       val nameMapper = if (primitive_?) mapToPrimitiveJavaName else mapToRefJavaName
       if (sym.fullName == "scala.Array") {
         toJavaClass(genericParams(0), true) match {
@@ -94,11 +138,8 @@ object ScalaSigUtil {
           nameMapper(sym.fullName),
           genericParams.map(p => toJavaClass(p, false).get).toArray))
       }
-    }
-    case _ => {
+    case _ =>
       None
-    }
-
   }
 
   def forName(name: String) = Class.forName(name)
@@ -116,20 +157,28 @@ object ScalaSigUtil {
     }
   }
 
-
   val commonNameMaps: Seq[(String, Class[_])] = Seq(
     "scala.Predef.String" -> classOf[java.lang.String],
+    "scala.Predef.List" -> classOf[List[_]],
     "scala.Predef.Map" -> classOf[Map[_, _]],
     "scala.Predef.Seq" -> classOf[Seq[_]],
     "scala.Predef.Set" -> classOf[Set[_]],
+    "scala.Predef.Either" -> classOf[Either[_, _]],
+    "scala.List" -> classOf[List[_]],
+    "scala.Map" -> classOf[Map[_, _]],
+    "scala.Seq" -> classOf[Seq[_]],
+    "scala.Set" -> classOf[Set[_]],
+    "scala.Either" -> classOf[Either[_, _]],
     "scala.package.List" -> classOf[List[_]],
-    "scala.Unit" ->classOf[java.lang.Void],
+    "scala.package.Map" -> classOf[Map[_, _]],
     "scala.package.Seq" -> classOf[Seq[_]],
-    "scala.package.Either" -> classOf[Either[_,_]]
+    "scala.package.Set" -> classOf[Set[_]],
+    "scala.package.Either" -> classOf[Either[_, _]],
+    "scala.Unit" -> classOf[java.lang.Void]
   )
 
   object mapToRefJavaName extends MapToJavaName {
-    val nameMap = commonNameMaps ++ Seq(
+    val nameMap = (commonNameMaps ++ Seq(
       "scala.Int" -> classOf[java.lang.Integer],
       "scala.Byte" -> classOf[java.lang.Byte],
       "scala.Short" -> classOf[java.lang.Short],
@@ -137,11 +186,11 @@ object ScalaSigUtil {
       "scala.Float" -> classOf[java.lang.Float],
       "scala.Double" -> classOf[java.lang.Double],
       "scala.Boolean" -> classOf[java.lang.Boolean]
-    ) toMap
+    )).toMap
   }
 
   object mapToPrimitiveJavaName extends MapToJavaName {
-    val nameMap = commonNameMaps ++ Seq(
+    val nameMap = (commonNameMaps ++ Seq(
       "scala.Int" -> java.lang.Integer.TYPE,
       "scala.Byte" -> java.lang.Byte.TYPE,
       "scala.Short" -> java.lang.Short.TYPE,
@@ -149,7 +198,7 @@ object ScalaSigUtil {
       "scala.Float" -> java.lang.Float.TYPE,
       "scala.Double" -> java.lang.Double.TYPE,
       "scala.Boolean" -> java.lang.Boolean.TYPE
-    ) toMap
+    )).toMap
   }
 
   def getCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {
@@ -176,12 +225,8 @@ object ScalaSigUtil {
         val c = Class.forName(clazz.getName.substring(0, clazz.getName.length - 1))
         Some(c)
       } catch {
-        case e: NoClassDefFoundError => {
-          None
-        }
-        case e: ClassNotFoundException => {
-          None
-        }
+        case e: NoClassDefFoundError => None
+        case e: ClassNotFoundException => None
       }
     }
   }
@@ -203,7 +248,6 @@ class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extend
 
 object MyParameterizedType {
   def apply(m: Manifest[_]): MyParameterizedType = {
-    new MyParameterizedType(m.erasure, m.typeArguments.map(MyParameterizedType.apply(_)).toArray)
-
+    new MyParameterizedType(m.runtimeClass, m.typeArguments.map(MyParameterizedType.apply).toArray)
   }
 }

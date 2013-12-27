@@ -6,28 +6,31 @@ import org.sbtidea.SbtIdeaPlugin
 
 object MessagePackScalaBuild extends Build {
   val messagePackVersion = "0.6.9"
-  
+
   override lazy val settings = super.settings ++
       Seq(
         organization := "org.msgpack",
         name := "msgpack-scala",
         version := messagePackVersion,
         scalaVersion := "2.11.0-M7",
+        scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8", "-feature"),
         // crossScalaVersions := Seq("2.9.0-1","2.9.1","2.9.1-1","2.9.2"),
         resolvers ++= Seq(Resolver.mavenLocal),
-        parallelExecution in Test := false
+        parallelExecution in Test := false,
+        fork in Test := true
       )
 
   lazy val dependencies = Seq(
     "org.msgpack" % "msgpack" % messagePackVersion,
     "com.googlecode.json-simple" % "json-simple" % "1.1.1" % "compile",
     "org.javassist" % "javassist" % "3.16.1-GA" % "compile",
-    "org.slf4j" % "slf4j-api" % "1.6.4" % "provided"
+    "org.slf4j" % "slf4j-api" % "1.7.5" % "provided"
   )
 
   lazy val dependenciesForTest = Seq(
     "junit" % "junit" % "4.11" % "test",
-    "org.slf4j" % "slf4j-nop" % "1.7.2" % "test"
+    "ch.qos.logback" % "logback-core" % "1.0.13" % "test",
+    "ch.qos.logback" % "logback-classic" % "1.0.13" % "test"
   )
 
   lazy val dependsOnScalaVersion = (scalaVersion) { v => {

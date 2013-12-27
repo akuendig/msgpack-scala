@@ -25,7 +25,7 @@ import java.lang.reflect.{Constructor, Modifier}
 import org.msgpack.template.{TemplateRegistry, Template}
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/12 17:53
  */
@@ -45,6 +45,17 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   def buildTemplate(targetClass: Class[_],
                     entries: Array[ScalaFieldEntry],
                     templates: Array[Template[_]]) = {
+//    import java.util.logging.{ConsoleHandler, Level, Logger, SimpleFormatter}
+//
+//    val log = Logger.getLogger("")
+//      if (log.getLevel != Level.ALL) {
+//      log.setLevel(Level.ALL)
+//      val handler = new ConsoleHandler()
+//      handler.setLevel(Level.ALL)
+//      handler.setFormatter(new SimpleFormatter())
+//      log.addHandler(handler)
+//    }
+
     this.originalClass = targetClass
     this.templates = templates
     this.entries = entries

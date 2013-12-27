@@ -85,7 +85,7 @@ trait ScalaMessagePackWrapper{
       val t = messagePack.lookup(MyParameterizedType(manifest))
       messagePack.read(data,t).asInstanceOf[T]
     }else{
-      messagePack.read(data, manifest.erasure.asInstanceOf[Class[T]])
+      messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
     }
   }
 
@@ -94,7 +94,7 @@ trait ScalaMessagePackWrapper{
       val t = messagePack.lookup(MyParameterizedType(manifest))
       messagePack.read(data,t).asInstanceOf[T]
     }else{
-      messagePack.read(data, manifest.erasure.asInstanceOf[Class[T]])
+      messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
     }
   }
 

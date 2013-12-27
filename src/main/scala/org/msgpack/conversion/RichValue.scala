@@ -23,7 +23,7 @@ import org.msgpack.MessagePack
 import org.msgpack.`type`.{ValueFactory, Value}
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/14 13:07
  */
@@ -53,7 +53,7 @@ class RichValue(messagePack : MessagePack,value : Value){
   }
 
   def asArray[T](implicit manifest : Manifest[Array[T]]) : Array[T] = {
-    messagePack.convert(value,manifest.erasure).asInstanceOf[Array[T]]
+    messagePack.convert(value,manifest.runtimeClass).asInstanceOf[Array[T]]
   }
 
   def asList[T](implicit manifest : Manifest[T]) : List[T] = {
@@ -66,8 +66,8 @@ class RichValue(messagePack : MessagePack,value : Value){
   }
 
   def asMap[K,V](implicit keyManife : Manifest[K] , valueManife : Manifest[V]) : Map[K,V] = {
-    val keyC = keyManife.erasure.asInstanceOf[Class[K]]
-    val valueC = valueManife.erasure.asInstanceOf[Class[V]]
+    val keyC = keyManife.runtimeClass.asInstanceOf[Class[K]]
+    val valueC = valueManife.runtimeClass.asInstanceOf[Class[V]]
     Map(value.asMapValue().getKeyValueArray().sliding(2,2).map( v => {
       messagePack.convert(v(0),keyC) -> messagePack.convert(v(1),valueC)
     }).toSeq:_*)
