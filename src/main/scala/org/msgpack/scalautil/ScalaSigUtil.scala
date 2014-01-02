@@ -244,4 +244,15 @@ object MyParameterizedType {
   def apply(m: Manifest[_]): MyParameterizedType = {
     new MyParameterizedType(m.runtimeClass, m.typeArguments.map(MyParameterizedType.apply).toArray)
   }
+
+  def apply[T: TypeTag](): MyParameterizedType =
+    apply(typeOf[T])
+
+  def apply(t: Type): MyParameterizedType = {
+    val clazz = cm.runtimeClass(t)
+    val typeParams = t match { case TypeRef(_, _, args) => args }
+    val jTypeParams = typeParams.map(tp => apply(tp).asInstanceOf[JType]).toArray
+
+    new MyParameterizedType(clazz, jTypeParams)
+  }
 }

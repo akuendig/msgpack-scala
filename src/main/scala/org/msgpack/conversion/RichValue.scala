@@ -21,6 +21,7 @@ package org.msgpack.conversion
 import org.msgpack.scalautil.MyParameterizedType
 import org.msgpack.MessagePack
 import org.msgpack.`type`.{ValueFactory, Value}
+import scala.reflect.runtime.universe._
 
 /**
  *
@@ -28,78 +29,104 @@ import org.msgpack.`type`.{ValueFactory, Value}
  * Create: 11/10/14 13:07
  */
 
-class RichValue(messagePack : MessagePack,value : Value){
+class RichValue(messagePack: MessagePack, value: Value) {
 
-  def apply( index : Int) : Value = {
-    if(value.isMapValue){
+  def apply(index: Int): Value = {
+    if (value.isMapValue) {
       apply(ValueFactory.createIntegerValue(index))
-    }else{
+    } else {
       value.asArrayValue().get(index)
     }
   }
-  def apply( value : Value) : Value = {
+
+  def apply(value: Value): Value = {
     value.asMapValue().get(value)
   }
 
-  def toValueArray : Array[Value] = {
-    value.asArrayValue().getElementArray()
+  def toValueArray: Array[Value] = {
+    value.asArrayValue().getElementArray
   }
-  def toValueList:List[Value] = {
+
+  def toValueList: List[Value] = {
     toValueArray.toList
   }
 
-  def toValueMap: Map[Value,Value] = {
-    Map(value.asMapValue().getKeyValueArray.sliding(2,2).map(p => p(0) -> p(1)).toSeq:_*)
+  def toValueMap: Map[Value, Value] = {
+    value.
+      asMapValue().
+      getKeyValueArray.
+      grouped(2).
+      map(p => p(0) -> p(1)).
+      toMap
   }
 
-  def asArray[T](implicit manifest : Manifest[Array[T]]) : Array[T] = {
-    messagePack.convert(value,manifest.runtimeClass).asInstanceOf[Array[T]]
+  def asArray[T: TypeTag]: Array[T] = {
+    val templ = messagePack.lookup(MyParameterizedType[Array[T]]())
+
+    messagePack.convert(value, templ).asInstanceOf[Array[T]]
   }
 
-  def asList[T](implicit manifest : Manifest[T]) : List[T] = {
-    asArray(manifest.arrayManifest).toList
+  def asList[T: TypeTag]: List[T] = {
+    val templ = messagePack.lookup(MyParameterizedType[List[T]]())
+
+    messagePack.convert(value, templ).asInstanceOf[List[T]]
   }
 
-  def as[T](implicit manifest : Manifest[T]) : T = {
-    val t = messagePack.lookup(MyParameterizedType(manifest))
-    messagePack.convert(value, t).asInstanceOf[T]
+  def as[T: TypeTag]: T = {
+    val templ = messagePack.lookup(MyParameterizedType[T]())
+
+    messagePack.convert(value, templ).asInstanceOf[T]
   }
 
-  def asMap[K,V](implicit keyManife : Manifest[K] , valueManife : Manifest[V]) : Map[K,V] = {
-    val keyC = keyManife.runtimeClass.asInstanceOf[Class[K]]
-    val valueC = valueManife.runtimeClass.asInstanceOf[Class[V]]
-    Map(value.asMapValue().getKeyValueArray().sliding(2,2).map( v => {
-      messagePack.convert(v(0),keyC) -> messagePack.convert(v(1),valueC)
-    }).toSeq:_*)
+  def asMap[K: TypeTag, V: TypeTag]: Map[K, V] = {
+    val keyTemp = messagePack.lookup(MyParameterizedType[K]())
+    val valTemp = messagePack.lookup(MyParameterizedType[V]())
+
+    val entries = for {
+      Array(key, value) <- value.asMapValue().getKeyValueArray.grouped(2)
+    } yield (
+        messagePack.convert(key, keyTemp).asInstanceOf[K],
+        messagePack.convert(value, valTemp).asInstanceOf[V]
+        )
+
+    entries.toMap
   }
-  override def toString() : String = {
-    value.toString()
+
+  override def toString: String = {
+    value.toString
   }
 
 
-  def asByte() : Byte = {
+  def asByte(): Byte = {
     value.asIntegerValue().getByte
   }
-  def asShort() : Short = {
+
+  def asShort(): Short = {
     value.asIntegerValue().getShort
   }
-  def asInt() : Int = {
+
+  def asInt(): Int = {
     value.asIntegerValue().getInt
   }
-  def asLong() : Long = {
+
+  def asLong(): Long = {
     value.asIntegerValue().getLong
   }
-  def asDouble() : Double = {
+
+  def asDouble(): Double = {
     value.asFloatValue.getDouble
   }
-  def asFloat() : Float = {
+
+  def asFloat(): Float = {
     value.asFloatValue.getFloat
   }
-  def asBool() : Boolean = {
+
+  def asBool(): Boolean = {
     value.asBooleanValue.getBoolean
   }
-  def asString() : String = {
-    value.asRawValue().getString()
+
+  def asString(): String = {
+    value.asRawValue().getString
   }
 
 

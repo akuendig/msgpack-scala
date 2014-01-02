@@ -20,69 +20,65 @@ package org.msgpack
 
 import `type`.Value
 import conversion.RichValue
-import org.junit.runner.RunWith
-import org.specs2.mutable.{SpecificationWithJUnit, Specification}
+import org.specs2.mutable.SpecificationWithJUnit
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/14 13:38
  */
 
-class ImplicitConversionTest extends SpecificationWithJUnit{
+class ImplicitConversionTest extends SpecificationWithJUnit {
 
-  "Implicit conversions" should{
-    "convert primitives" in{
+  "Implicit conversions" should {
+    "convert primitives" in {
       import ScalaMessagePack._
 
-      println(List("","").getClass().hashCode)
-      println(ScalaMessagePack.messagePack.lookup(List("","").getClass()))
-
-      val v = List(1,23L,2 : Short , 4:Byte , 0.3f , 0.22 , false)
+      val v = List(1, 23L, 2: Short, 4: Byte, 0.3f, 0.22, false)
       val data = writeV(v)
       val decoded = readAsValue(data)
 
-      val i : Int = decoded(0)
+      val i: Int = decoded(0)
       i must_== v(0)
-      val l : Long = decoded(1)
+      val l: Long = decoded(1)
       l must_== v(1)
-      val s : Short = decoded(2)
+      val s: Short = decoded(2)
       s must_== v(2)
-      val b : Byte = decoded(3)
+      val b: Byte = decoded(3)
       b must_== v(3)
-      val f : Float = decoded(4)
+      val f: Float = decoded(4)
       f must_== v(4)
-      val d : Double = decoded(5)
+      val d: Double = decoded(5)
       d must_== v(5)
-      val bool : Boolean = decoded(6)
+      val bool: Boolean = decoded(6)
       bool must_== v(6)
     }
 
-    "convert tuple" in{
+    "convert tuple" in {
       import ScalaMessagePack._
-      writeV( (1,"a")) must not beNull;
-      writeV( (1,"a",false)) must not beNull;
-      writeV( (1,"a",false,2)) must not beNull;
-      writeV( (1,"a",false,2  )) must not beNull;
-      writeV( (1,"a",false,2  ,"hoge")) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge")) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a")) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b")) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10)) must not beNull; //tuple10
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17,18)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17,18,19)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17,18,19,20)) must not beNull; //tuple20
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17,18,19,20,21)) must not beNull;
-      writeV( (1,"a",false,2  ,"fuga","hoge",false,"a","b",10,11,12,13,14,15,16,17,18,19,20,21,22)) must not beNull;
-      val data = writeV( (1,"a",false,("nested","tuple")))
+      writeV((1, "a")) must not beNull;
+      writeV((1, "a", false)) must not beNull;
+      writeV((1, "a", false, 2)) must not beNull;
+      writeV((1, "a", false, 2)) must not beNull;
+      writeV((1, "a", false, 2, "hoge")) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge")) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a")) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b")) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10)) must not beNull; //tuple10
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17, 18)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)) must not beNull; //tuple20
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)) must not beNull;
+      writeV((1, "a", false, 2, "fuga", "hoge", false, "a", "b", 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22)) must not beNull;
+      val data = writeV((1, "a", false, ("nested", "tuple")))
       val decoded = readAsValue(data)
       decoded(0).asInt must_== 1
       decoded(1).asString must_== "a"
@@ -90,20 +86,18 @@ class ImplicitConversionTest extends SpecificationWithJUnit{
 
     }
 
-    "convert list,map" in{
+    "convert list,map" in {
       import ScalaMessagePack._
 
-      val v = List(Map("hoge" -> 34,"fuga" -> false),List(1,2,3),List("a","b"))
+      val v = List(Map("hoge" -> 34, "fuga" -> false), List(1, 2, 3), List("a", "b"))
       val data = writeV(v)
       val decoded = readAsValue(data)
-      println(decoded)
 
-      val map : Map[Value,Value] = decoded(0).toValueMap
-      println(map)
+      val map: Map[Value, Value] = decoded(0).toValueMap
 
-      val i : Int = map("hoge")
+      val i: Int = map("hoge")
       i must_== 34
-      val b : Boolean = map("fuga")
+      val b: Boolean = map("fuga")
       b must_== false
 
       val iList = decoded(1).asList[Int]
@@ -112,17 +106,15 @@ class ImplicitConversionTest extends SpecificationWithJUnit{
 
       iList must_== v(1).asInstanceOf[List[Int]]
       sList must_== v(2).asInstanceOf[List[String]]
-
-
     }
 
-    "nested list" in{
+    "nested list" in {
       import ScalaMessagePack._
 
-      val v = List(List(1,2,3) , List(List(4,5) , List(6,7)))
+      val v = List(List(1, 2, 3), List(List(4, 5), List(6, 7)))
       val data = writeV(v)
       val decoded = readAsValue(data)
-      val richValue : RichValue = decoded
+      val richValue: RichValue = decoded
       val firstList = richValue(0).asList[Int]
       firstList must_== v(0)
       val secondList = richValue(1)(0).asList[Int]
@@ -132,7 +124,7 @@ class ImplicitConversionTest extends SpecificationWithJUnit{
 
     }
 
-    "map" in{
+    "map" in {
       import ScalaMessagePack._
 
       val v = Map("a" -> 1, "b" -> 2)
@@ -144,18 +136,17 @@ class ImplicitConversionTest extends SpecificationWithJUnit{
       bValue must_== 2
     }
 
-    "convert value to tuple using RichValue#as" in{
+    "convert value to tuple using RichValue#as" in {
       import ScalaMessagePack._
 
-      val t = (1,"foo")
+      val t = (1, "foo")
       val data = writeV(t)
       val decoded = readAsValue(data)
-      val richValue : RichValue = decoded
-      val r = richValue.as[(Int,String)]
+      val richValue: RichValue = decoded
+      val r = richValue.as[(Int, String)]
       r must_== t
     }
   }
-
 
 
 }

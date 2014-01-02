@@ -22,7 +22,7 @@ import org.msgpack.MessagePack
 import org.msgpack.`type`.{ValueFactory, Value}
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/14 13:02
  */
@@ -31,6 +31,7 @@ import org.msgpack.`type`.{ValueFactory, Value}
  * Defines Value implicit conversions
  */
 trait ValueConversions{
+  import scala.language.implicitConversions
 
   def messagePack : MessagePack
   // implicit Value conversions
@@ -48,7 +49,7 @@ trait ValueConversions{
     value.asIntegerValue().getLong
   }
   implicit def valueToString(value : Value) : String = {
-    value.asRawValue().getString()
+    value.asRawValue().getString
   }
   implicit def valueToDouble(value : Value) : Double = {
     value.asFloatValue.getDouble
