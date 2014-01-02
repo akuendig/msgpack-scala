@@ -82,7 +82,7 @@ object ScalaSigUtil {
 
       // Test if that method has the correct return type
       if getter.returnType =:= setter.paramss.head.head.typeSignature
-    } yield Property(cleanName, getter, setter, fieldMap.get(cleanName))
+    } yield Property(getter.name.encoded, getter, setter, fieldMap.get(cleanName))
 
     //    logger.debug("The extracted properties are: {}", properties.map(_.name))
 

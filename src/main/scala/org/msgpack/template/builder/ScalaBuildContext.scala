@@ -19,10 +19,10 @@ package org.msgpack.template.builder
 
 import java.lang.{String, Class}
 import org.slf4j.{LoggerFactory, Logger}
-import javassist.{ClassPool, CtNewConstructor, CtClass}
+import javassist.{CtNewConstructor, CtClass}
 import org.msgpack.MessageTypeException
 import java.lang.reflect.{Constructor, Modifier}
-import org.msgpack.template.{TemplateRegistry, Template}
+import org.msgpack.template.Template
 
 /**
  *
@@ -30,40 +30,44 @@ import org.msgpack.template.{TemplateRegistry, Template}
  * Create: 11/10/12 17:53
  */
 
-class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildContext[ScalaFieldEntry](builder){
+class ScalaBuildContext(builder: JavassistScalaTemplateBuilder) extends BuildContext[ScalaFieldEntry](builder) {
 
-  private var logger : Logger = LoggerFactory.getLogger(classOf[ScalaBuildContext])
+  private val logger: Logger = LoggerFactory.getLogger(classOf[ScalaBuildContext])
 
 
   val pool = builder.pool
-  var originalClass : Class[_] = null
-  var templates : Array[Template[_]]  = Array()
-  var entries : Array[ScalaFieldEntry] = Array()
+  var originalClass: Class[_] = null
+  var templates: Array[Template[_]] = Array()
+  var entries: Array[ScalaFieldEntry] = Array()
 
   def originalClassName = originalClass.getName()
 
   def buildTemplate(targetClass: Class[_],
                     entries: Array[ScalaFieldEntry],
                     templates: Array[Template[_]]) = {
-//    import java.util.logging.{ConsoleHandler, Level, Logger, SimpleFormatter}
-//
-//    val log = Logger.getLogger("")
-//      if (log.getLevel != Level.ALL) {
-//      log.setLevel(Level.ALL)
-//      val handler = new ConsoleHandler()
-//      handler.setLevel(Level.ALL)
-//      handler.setFormatter(new SimpleFormatter())
-//      log.addHandler(handler)
-//    }
+    /* Use the following commented out section to debug generated Java code to the console.
+    **************************************************************************************/
+    //    import java.util.logging.{ConsoleHandler, Level, Logger, SimpleFormatter}
+    //
+    //    val log = Logger.getLogger("")
+    //      if (log.getLevel != Level.ALL) {
+    //      log.setLevel(Level.ALL)
+    //      val handler = new ConsoleHandler()
+    //      handler.setLevel(Level.ALL)
+    //      handler.setFormatter(new SimpleFormatter())
+    //      log.addHandler(handler)
+    //    }
 
     this.originalClass = targetClass
     this.templates = templates
     this.entries = entries
     build(originalClassName)
   }
+
   def writeTemplate(targetClass: Class[_],
                     entries: Array[ScalaFieldEntry],
                     templates: Array[Template[_]], directoryName: String) = {}
+
   /* 0.6.1
   def loadTemplate(targetClass: Class[_]) = {
     this.originalClass = targetClass
@@ -80,8 +84,6 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   }
 
 
-
-
   // build
 
 
@@ -92,11 +94,10 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   }
 
 
-
   def buildConstructor() = {
     val newCtCons = CtNewConstructor.make(
       Array[CtClass](pool.getCtClass(classOf[Class[_]].getName),
-            pool.getCtClass(classOf[Template[_]].getName + "[]")),
+        pool.getCtClass(classOf[Template[_]].getName + "[]")),
       new Array[CtClass](0), tmplCtClass)
     tmplCtClass.addConstructor(newCtCons)
   }
@@ -104,7 +105,7 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   def buildInstance(c: Class[_]) = {
     var cons: Constructor[_] = c.getConstructor(
       classOf[Class[Any]], classOf[Array[Template[Any]]])
-    cons.newInstance(originalClass,templates).asInstanceOf[Template[_]]
+    cons.newInstance(originalClass, templates).asInstanceOf[Template[_]]
   }
 
   //for write
@@ -113,7 +114,7 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
     val builder = new StringBuilder()
 
     // null check
-    builder.append("""
+    builder.append( """
 {
   if($2 == null) {
     if($3) {
@@ -122,66 +123,67 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
     $1.writeNil();
     return;
   }
-""".format(classOf[MessageTypeException].getName()))
+                    """.format(classOf[MessageTypeException].getName()))
 
     // constructor
-    builder.append("""  %s _$$_t = (%s) $2;
+    builder.append( """  %s _$$_t = (%s) $2;
   $1.writeArrayBegin(%d);
-""".format(originalClassName,originalClassName,entries.length))
+                    """.format(originalClassName, originalClassName, entries.length))
 
     // fields
     var index = 0
-    for( e <- entries){
-      if(!e.available_?){
+    for (e <- entries) {
+      if (!e.available_?) {
         builder.append("  $1.writeNil();\n")
-      }else if(e.primitive_?){
-        writePrimitiveValue(builder,index,e)
-      }else if(e.nullable_?){
-        writeNullableMethod(builder,index,e)
-      }else if(classOf[Enumeration].isAssignableFrom(e.getType)){
-        writeEnumValueMethod(builder,index,e)
-      }else{
-        writeNotNullableMethod(builder,index,e)
+      } else if (e.primitive_?) {
+        writePrimitiveValue(builder, index, e)
+      } else if (e.nullable_?) {
+        writeNullableMethod(builder, index, e)
+      } else if (classOf[Enumeration].isAssignableFrom(e.getType)) {
+        writeEnumValueMethod(builder, index, e)
+      } else {
+        writeNotNullableMethod(builder, index, e)
       }
       index += 1
     }
 
     // cap
-    builder.append("""  $1.writeArrayEnd();
+    builder.append( """  $1.writeArrayEnd();
 }""")
 
     builder.toString()
   }
-  protected def writePrimitiveValue(builder : StringBuilder,index : Int, entry : ScalaFieldEntry) = {
-    builder.append("""  $1.%s(_$$_t.%s());
-""".format(primitiveWriteName(entry.getType),entry.getName))
+
+  protected def writePrimitiveValue(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """  $1.%s(_$$_t.%s());
+                    """.format(primitiveWriteName(entry.getType), entry.getName))
   }
 
-  protected def writeNullableMethod(builder : StringBuilder,index : Int, entry : ScalaFieldEntry) = {
-    builder.append("""  if(_$$_t.%s() == null){
+  protected def writeNullableMethod(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """  if(_$$_t.%s() == null){
     $1.writeNil();
   }else{
     templates()[%d].write($1, _$$_t.%s());
   }
-""".format(entry.getName,index,entry.getName))
+                    """.format(entry.getName, index, entry.getName))
   }
 
-  protected def writeNotNullableMethod(builder : StringBuilder,index : Int, entry : ScalaFieldEntry) = {
-    builder.append("""  if(_$$_t.%s() == null){
+  protected def writeNotNullableMethod(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """  if(_$$_t.%s() == null){
     throw new %s();
   }else{
     templates()[%d].write($1, _$$_t.%s());
   }
-""".format(entry.getName,classOf[MessageTypeException].getName(),index,entry.getName))
+                    """.format(entry.getName, classOf[MessageTypeException].getName(), index, entry.getName))
   }
 
-  protected def writeEnumValueMethod(builder : StringBuilder,index : Int, entry : ScalaFieldEntry) = {
-    builder.append("""  if(_$$_t.%s() == null){
+  protected def writeEnumValueMethod(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """  if(_$$_t.%s() == null){
     throw new %s();
   }else{
     $1.int(_$$_t.%s().id());
   }
-""".format(entry.getName,classOf[MessageTypeException].getName(),index,entry.getName))
+                    """.format(entry.getName, classOf[MessageTypeException].getName(), index, entry.getName))
   }
 
 
@@ -190,7 +192,7 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   def buildReadMethodBody() = {
     val builder = new StringBuilder
     // init
-    builder.append("""
+    builder.append( """
 {
   if( !$3 && $1.trySkipNil()) {
     return null;
@@ -202,28 +204,28 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
     _$$_t = (%s) $2;
   }
   $1.readArrayBegin();
-""".format(originalClassName,selectGoodConstructor,originalClassName))
+                    """.format(originalClassName, selectGoodConstructor, originalClassName))
 
     // fields
     var index = 0
-    for( e <- entries){
-      if(!e.available_?){
+    for (e <- entries) {
+      if (!e.available_?) {
         builder.append("  $1.skip();\n")
-      }else if(e.optional_?){
-        readOptionalMethod(builder,index,e)
-      }else if(e.primitive_?){
-        readPrimitive(builder,index,e)
-      }else if(classOf[Enumeration].isAssignableFrom(e.getType)){
-        readEnumValue(builder,index,e)
-      }else{
-        readAnyRef(builder,index,e)
+      } else if (e.optional_?) {
+        readOptionalMethod(builder, index, e)
+      } else if (e.primitive_?) {
+        readPrimitive(builder, index, e)
+      } else if (classOf[Enumeration].isAssignableFrom(e.getType)) {
+        readEnumValue(builder, index, e)
+      } else {
+        readAnyRef(builder, index, e)
       }
 
       index += 1
     }
 
     //cap
-    builder.append("""
+    builder.append( """
   $1.readArrayEnd();
   return _$$_t;
 }""")
@@ -234,67 +236,66 @@ class ScalaBuildContext(builder : JavassistScalaTemplateBuilder) extends BuildCo
   /**
    * check constructor and companion class.
    */
-  protected def selectGoodConstructor() : String = {
-    try{
+  protected def selectGoodConstructor(): String = {
+    try {
       val cons = originalClass.getConstructor()
-      if(Modifier.isPublic(cons.getModifiers)){
+      if (Modifier.isPublic(cons.getModifiers)) {
         return "new %s()".format(originalClassName)
       }
-    }catch{
-      case e : NoSuchMethodException =>
+    } catch {
+      case e: NoSuchMethodException =>
     }
-    try{
+    try {
       val c = originalClass.getClassLoader.loadClass(originalClass.getName + "$")
-      if(Modifier.isPublic(c.getModifiers())){
+      if (Modifier.isPublic(c.getModifiers())) {
         val m = c.getMethod("apply")
-        if(Modifier.isPublic(m.getModifiers) &&
-          originalClass.isAssignableFrom(m.getReturnType)){
+        if (Modifier.isPublic(m.getModifiers) &&
+          originalClass.isAssignableFrom(m.getReturnType)) {
 
           val staticField = c.getDeclaredField("MODULE$")
-          return "%s.%s.apply()".format(c.getName,staticField.getName)
+          return "%s.%s.apply()".format(c.getName, staticField.getName)
         }
       }
 
-    }catch{
-      case e : ClassNotFoundException =>
-      case e : NoSuchMethodException =>
-      case e : NoSuchFieldException =>
+    } catch {
+      case e: ClassNotFoundException =>
+      case e: NoSuchMethodException =>
+      case e: NoSuchFieldException =>
     }
     throw new MessageTypeException("Can't find plain constructor or companion object")
 
   }
 
-  def readOptionalMethod(builder : StringBuilder , index : Int , entry : ScalaFieldEntry) = {
-//    builder.append("""
-//  if ( $1.trySkipNil()) {
-//    _$$_t.%s_$eq(null);
-//  }else{
-//  """.format(entry.getName()))
-//    readAnyRef(builder,index,entry)
-//    builder.append("\n  }")
-    readAnyRef(builder,index,entry)
+  def readOptionalMethod(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    //    builder.append("""
+    //  if ( $1.trySkipNil()) {
+    //    _$$_t.%s_$eq(null);
+    //  }else{
+    //  """.format(entry.getName()))
+    //    readAnyRef(builder,index,entry)
+    //    builder.append("\n  }")
+    readAnyRef(builder, index, entry)
   }
 
-  def readPrimitive(builder : StringBuilder , index : Int , entry : ScalaFieldEntry) = {
-    builder.append("""
-  _$$_t.%s_$eq( $1.%s());""".format(entry.getName,primitiveReadName(entry.getType)))
+  def readPrimitive(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """
+  _$$_t.%s_$eq( $1.%s());""".format(entry.getName, primitiveReadName(entry.getType)))
   }
 
-  def readAnyRef(builder : StringBuilder , index : Int , entry : ScalaFieldEntry) = {
-    builder.append("""
+  def readAnyRef(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """
   _$$_t.%s_$eq( (%s) (this.templates()[%d].read($1,_$$_t.%s()) ) );""".format(
-      entry.getName,entry.getJavaTypeName,index,entry.getName()))
+        entry.getName, entry.getJavaTypeName, index, entry.getName()))
   }
 
-  def readEnumValue(builder : StringBuilder , index : Int , entry : ScalaFieldEntry) = {
-    builder.append("""
+  def readEnumValue(builder: StringBuilder, index: Int, entry: ScalaFieldEntry) = {
+    builder.append( """
 try{
   _$$_t.%s_$eq( %s.apply($1.int()));
 }catch(Exception e)
   _$$_t.%s_$eq(null);
-}""".format(entry.getName,entry.getType.getName,entry.getName))
+}""".format(entry.getName, entry.getType.getName, entry.getName))
   }
-
 
 
 }

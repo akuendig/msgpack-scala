@@ -36,7 +36,7 @@ class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
     if (entries == null) {
       throw new NullPointerException("entries is null: " + targetClass)
     }
-    
+
     val templates = toScalaTemplates(entries)
     new ReflectionScalaTemplate[AnyRef](targetClass.asInstanceOf[Class[AnyRef]], templates).asInstanceOf[Template[T]]
   }

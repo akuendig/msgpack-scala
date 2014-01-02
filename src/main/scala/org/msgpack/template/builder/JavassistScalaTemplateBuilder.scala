@@ -36,25 +36,16 @@ class JavassistScalaTemplateBuilder(_registry: TemplateRegistry, classLoader: Cl
   // build template
   override def buildTemplate[T](targetClass: Class[T], entries: Array[FieldEntry]) = {
     val templates = toTemplates(entries)
-    val bc = createBuildContext()
-
-//    for (t <- templates) println(t)
-
     val sEntries = entries.map(_.asInstanceOf[ScalaFieldEntry])
 
-    bc.buildTemplate(targetClass, sEntries, templates).asInstanceOf[Template[T]]
+    createBuildContext().buildTemplate(targetClass, sEntries, templates).asInstanceOf[Template[T]]
   }
 
-  private def toTemplates[T](entries: Array[FieldEntry]) = {
-    entries.map {
-      e =>
-        if (e.isAvailable) {
-          registry.lookup(e.getGenericType)
-        } else {
-          null
-        }
+  private def toTemplates[T](entries: Array[FieldEntry]): Array[Template[_]] =
+    entries.collect {
+      case e if e.isAvailable =>
+        registry.lookup(e.getGenericType).asInstanceOf[Template[_]]
     }
-  }
 
   // builder context
   override def createBuildContext() = {
