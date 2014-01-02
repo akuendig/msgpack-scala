@@ -21,9 +21,8 @@ import `type`.Value
 import conversion.ValueConversions
 import scalautil.MyParameterizedType
 import template._
-import collection.mutable.{MutableList, LinkedList}
-import collection.mutable.{Map => MMap, HashMap => MHashMap}
 import java.io.InputStream
+
 /*
  * The core object of scala message pack
  * You should import
@@ -40,7 +39,7 @@ import java.io.InputStream
  * Date: 11/03/10
  * Time: 1:34
  */
-object ScalaMessagePack extends ScalaMessagePackWrapper with ValueConversions{
+object ScalaMessagePack extends ScalaMessagePackWrapper with ValueConversions {
 
   /**
    * dummy init method
@@ -50,17 +49,23 @@ object ScalaMessagePack extends ScalaMessagePackWrapper with ValueConversions{
   val messagePack = new ScalaMessagePack()
 }
 
+
+/**
+ * Message pack implementation for scala
+ */
+class ScalaMessagePack extends MessagePack(new ScalaTemplateRegistry()) {}
+
 /**
  * Supply utility methods for MessagePack
- * Method names are changesd, because write and read method names often conflict when using filed importing
+ * Method names are changed, because write and read method names often conflict when using filed importing
  *
- * name is changed becouse
+ * name is changed because
  */
-trait ScalaMessagePackWrapper{
+trait ScalaMessagePackWrapper {
 
-  def messagePack : MessagePack
+  def messagePack: MessagePack
 
-  def write( obj : Any) : Array[Byte] = {
+  def write(obj: Any): Array[Byte] = {
     messagePack.write(obj)
   }
 
@@ -68,32 +73,32 @@ trait ScalaMessagePackWrapper{
    * This is synonym for write.
    * You use this method when "write" name conflicts using field importing
    */
-  def pack(obj : Any) : Array[Byte] = {
+  def pack(obj: Any): Array[Byte] = {
     messagePack.write(obj)
   }
 
-  def writeT[T](obj : T)(implicit template : Template[T]) : Array[Byte] = {
-    messagePack.write(obj,template)
+  def writeT[T](obj: T)(implicit template: Template[T]): Array[Byte] = {
+    messagePack.write(obj, template)
   }
 
-  def writeV(value : Value) : Array[Byte] = {
+  def writeV(value: Value): Array[Byte] = {
     messagePack.write(value)
   }
 
-  def read[T]( data : Array[Byte])(implicit manifest : Manifest[T]) : T = {
-    if(manifest.typeArguments.size > 0){
+  def read[T](data: Array[Byte])(implicit manifest: Manifest[T]): T = {
+    if (manifest.typeArguments.size > 0) {
       val t = messagePack.lookup(MyParameterizedType(manifest))
-      messagePack.read(data,t).asInstanceOf[T]
-    }else{
+      messagePack.read(data, t).asInstanceOf[T]
+    } else {
       messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
     }
   }
 
-  def read[T](data : InputStream)(implicit manifest : Manifest[T]) : T = {
-    if(manifest.typeArguments.size > 0){
+  def read[T](data: InputStream)(implicit manifest: Manifest[T]): T = {
+    if (manifest.typeArguments.size > 0) {
       val t = messagePack.lookup(MyParameterizedType(manifest))
-      messagePack.read(data,t).asInstanceOf[T]
-    }else{
+      messagePack.read(data, t).asInstanceOf[T]
+    } else {
       messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
     }
   }
@@ -101,42 +106,34 @@ trait ScalaMessagePackWrapper{
   /**
    * This is synonym for read.
    */
-  def unpack[T]( data : Array[Byte])(implicit manifest : Manifest[T]) : T = {
+  def unpack[T](data: Array[Byte])(implicit manifest: Manifest[T]): T = {
     read(data)(manifest)
   }
 
   /**
    * This is synonym for read.
    */
-  def unpack[T](data : InputStream)(implicit manifest : Manifest[T]) : T = {
+  def unpack[T](data: InputStream)(implicit manifest: Manifest[T]): T = {
     read(data)(manifest)
   }
 
-  def readTo[T](data : Array[Byte], obj : T) : T = {
-    messagePack.read(data,obj)
-  }
-  def readTo[T](data : InputStream, obj : T) : T = {
-    messagePack.read(data,obj)
+  def readTo[T](data: Array[Byte], obj: T): T = {
+    messagePack.read(data, obj)
   }
 
-  def readAsValue( data : Array[Byte]) : Value = {
+  def readTo[T](data: InputStream, obj: T): T = {
+    messagePack.read(data, obj)
+  }
+
+  def readAsValue(data: Array[Byte]): Value = {
     messagePack.read(data)
   }
-  def readAsValue( data : InputStream) : Value = {
+
+  def readAsValue(data: InputStream): Value = {
     messagePack.read(data)
   }
 
-  def convert[T](value : Value)(implicit manifest : Manifest[T]) = {
-    messagePack.convert(value,manifest.erasure)
+  def convert[T](value: Value)(implicit manifest: Manifest[T]) = {
+    messagePack.convert(value, manifest.runtimeClass)
   }
-}
-
-
-/**
- * Message pack implementation for scala
- */
-class ScalaMessagePack extends MessagePack(new ScalaTemplateRegistry()){
-
-
-
 }

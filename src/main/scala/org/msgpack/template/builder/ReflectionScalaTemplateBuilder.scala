@@ -49,11 +49,12 @@ class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
 }
 
 /**
- * Store companion object
+ * Cache for object constructors.
  */
-object CompanionObjectMap {
+object ConstructorMap {
+
   import scala.reflect.runtime.universe._
-  import scala.reflect.runtime.{ currentMirror => cm }
+  import scala.reflect.runtime.{currentMirror => cm}
   import scala.language.reflectiveCalls
 
   type Constructor = (() => Any)
@@ -66,10 +67,10 @@ object CompanionObjectMap {
   private val constructorsLock = new Object()
   private var constructors = Map.empty[Class[_], Constructor]
 
-  def newInstance(clazz: Class[_]): Any = {
+  def newInstance[T](clazz: Class[T]): T = {
     val ctor = getOrCreate(clazz)
 
-    ctor()
+    ctor().asInstanceOf[T]
   }
 
   // Threadsafe method to lookup or write a new entry to the constructor cache
@@ -101,8 +102,8 @@ object CompanionObjectMap {
     val hasEmptyConstructor = classType.declarations.exists {
       d =>
         d.isMethod &&
-        d.asMethod.isConstructor &&
-        d.asMethod.paramss == List(List())
+          d.asMethod.isConstructor &&
+          d.asMethod.paramss == List(List())
     }
 
     // We just return the java constructor method. This is
@@ -115,7 +116,7 @@ object CompanionObjectMap {
       throwingConstructor
 
     // This type is used to make a reflective call to an empty apply() method.
-    type EmptyApply = { def apply(): Any }
+    type EmptyApply = {def apply(): Any}
 
     // Get to the companion symbol via reflection
     val companionSymbol = classSymbol.companionSymbol.asModule
@@ -138,32 +139,25 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
 
     val to: T =
       if (base == null)
-        CompanionObjectMap.newInstance(targetClass).asInstanceOf[T]
+        ConstructorMap.newInstance(targetClass)
       else
         base
 
-    unpacker.readArrayBegin
-    var i: Int = 0
-    while (i < templates.length) {
-      {
-        var tmpl = templates(i)
-        if (!tmpl.entry.isAvailable) {
-          unpacker.skip
-        }
-        else if (tmpl.entry.isOptional && unpacker.trySkipNil) {
-          println("Skipped !" + tmpl)
-        }
-        else {
-          tmpl.asInstanceOf[Template[T]].read(unpacker, to, false)
-        }
+    unpacker.readArrayBegin()
+
+    for (template <- templates) {
+      if (!template.entry.isAvailable) {
+        unpacker.skip()
+      } else if (template.entry.isOptional && unpacker.trySkipNil) {
+        println("Skipped !" + template)
+      } else {
+        template.asInstanceOf[Template[T]].read(unpacker, to, false)
       }
-      ({
-        i += 1;
-        i
-      })
     }
-    unpacker.readArrayEnd
-    return to
+
+    unpacker.readArrayEnd()
+
+    to
   }
 
 
@@ -177,11 +171,13 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
     }
 
     packer.writeArrayBegin(templates.length)
+
     for (template <- templates) {
       if (!template.entry.isAvailable) {
         packer.writeNil
       } else {
         val obj = template.entry.get(target).asInstanceOf[T]
+
         if (obj == null) {
           if (template.entry.isNotNullable) {
             throw new MessageTypeException(template.entry.getName + " cannot be null by @NotNullable")
@@ -192,8 +188,8 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
         }
       }
     }
-    packer.writeArrayEnd
 
+    packer.writeArrayEnd
   }
 }
 
@@ -201,10 +197,12 @@ class ReflectionScalaFieldTemplate[T <: AnyRef](val entry: ScalaFieldEntry, temp
   def read(u: Unpacker, to: T, required: Boolean): T = {
     val f = entry.get(to).asInstanceOf[T]
     val v = template.read(u, f, required)
+
     if (v != f) {
       entry.set(to, v)
     }
-    return v.asInstanceOf[T]
+
+    v.asInstanceOf[T]
   }
 
   def write(pk: Packer, v: T, required: Boolean) = {
