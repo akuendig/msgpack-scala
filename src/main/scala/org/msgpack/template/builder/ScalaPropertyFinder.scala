@@ -120,7 +120,6 @@ trait ScalaPropertyFinder{
           readFieldOption(propInfo, FieldOption.DEFAULT),
           ScalaSigUtil.toErasedJavaClass(getter.returnType),
           ScalaSigUtil.getCompanionObjectClass(getter.returnType).
-            map(ScalaSigUtil.toJavaClass).
             get,
           ScalaSigUtil.toJavaMethod(getter),
           ScalaSigUtil.toJavaMethod(setter)

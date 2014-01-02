@@ -198,18 +198,16 @@ object ScalaSigUtil {
     )).toMap
   }
 
-  def getCompanionObjectClass(tpe: Type): Option[Type] = {
-    // Get the Java class because that way we correctly transalte enum
+  def getCompanionObjectClass(tpe: Type): Option[Class[_]] = {
+    // Get the Java class because that way we correctly translate enum
     // Values. We use a mirror to get back
     val javaClass =
       toJavaClass(tpe).asInstanceOf[Class[_]]
     val companion =
       cm.classSymbol(javaClass).companionSymbol
 
-    if (companion == NoSymbol) {
-      None
-    } else
-      Some(companion.typeSignature)
+    if (companion == NoSymbol) None
+    else Some(cm.runtimeClass(companion.typeSignature))
   }
 
   def reverseCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {

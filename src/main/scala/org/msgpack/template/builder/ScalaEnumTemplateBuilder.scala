@@ -28,10 +28,9 @@ class ScalaEnumTemplateBuilder(registry : TemplateRegistry) extends AbstractTemp
   }
 
   def matchType(targetType: Type, forceBuild: Boolean): Boolean = {
-    targetType match{
-      case com : Class[_] if classOf[Enumeration].isAssignableFrom(com) => {
+    targetType match {
+      case com : Class[_] if classOf[Enumeration].isAssignableFrom(com) =>
         true
-      }
       case _ => false
     }
   }
