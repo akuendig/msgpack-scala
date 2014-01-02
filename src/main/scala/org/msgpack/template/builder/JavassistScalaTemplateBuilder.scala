@@ -44,7 +44,7 @@ class JavassistScalaTemplateBuilder(_registry: TemplateRegistry, classLoader: Cl
   private def toTemplates[T](entries: Array[FieldEntry]): Array[Template[_]] =
     entries.collect {
       case e if e.isAvailable =>
-        registry.lookup(e.getGenericType).asInstanceOf[Template[_]]
+        registry.lookup(e.getGenericType)
     }
 
   // builder context

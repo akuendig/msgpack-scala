@@ -19,12 +19,11 @@ package org.msgpack.template.builder
 
 import org.msgpack.template.FieldOption
 import org.msgpack.annotation.{NotNullable, Optional, Index, Ignore}
-import java.lang.annotation.{ Annotation => JAnnotation}
-import java.lang.reflect.{Modifier, Field, Method, Type => JType, ParameterizedType}
+import java.lang.annotation.{Annotation => JAnnotation}
 import org.msgpack.scalautil.ScalaSigUtil
 import org.msgpack.scalautil.ScalaSigUtil.Property
 import scala.reflect.runtime.universe._
-import org.slf4j.LoggerFactory
+import scala.collection.immutable.Queue
 
 /**
  * Combination with java reflection and scalap.ScalaSigParser
@@ -32,26 +31,33 @@ import org.slf4j.LoggerFactory
  * Create: 11/10/13 11:53
  */
 
-trait ScalaPropertyFinder{
-  self : AbstractTemplateBuilder =>
+trait ScalaPropertyFinder {
+  self: AbstractTemplateBuilder =>
 
-  val logger = LoggerFactory.getLogger(getClass)
-
-  override def toFieldEntries(targetClass: Class[_], from: FieldOption) : Array[FieldEntry] = {
-    val props = ScalaSigUtil.getAllProperties(targetClass).filter(_ != null)
+  override def toFieldEntries(targetClass: Class[_], from: FieldOption): Array[FieldEntry] = {
+    // Find all declared or inherited properties
+    val props = ScalaSigUtil.getAllProperties(targetClass)
+    // Sort them according to the @index annotations
     val indexed = indexing(props)
 
+    // Convert them to field entries
     indexed.map(convertToScalaFieldEntry)
   }
 
   def indexing(props: Seq[Property]): Array[Property] = {
+    // Create an empty list for all properties.
     val indexed = new Array[Property](props.size)
 
-    var notIndexed: List[Property] = Nil
+    // Create a queue for all properties, that have no @index annotation
+    var notIndexed: Queue[Property] = Queue.empty
 
+    // Read to all properties and filter out the ones
+    // without @index into `notIndexed`, write the others
+    // into the declared index in `indexed`.
     for (s <- props) {
       getAnnotation[Index](s) match {
-        case None => notIndexed = notIndexed :+ s
+        case None =>
+          notIndexed = notIndexed.enqueue(s)
         case Some(indexAnnotation) =>
           val index = ScalaSigUtil.
             annotationArg(indexAnnotation, "value").
@@ -59,29 +65,37 @@ trait ScalaPropertyFinder{
             value.
             asInstanceOf[java.lang.Integer]
 
-          if (indexed(index) != null) {
-            throw new TemplateBuildException("duplicated index: " + index)
-          } else if (index < 0 || index >= indexed.length) {
+          if (index < 0 || index >= indexed.length) {
             throw new TemplateBuildException("invalid index: %s index must be 0 <= x < %s".format(index, indexed.length))
+          } else if (indexed(index) != null) {
+            throw new TemplateBuildException("duplicated index: " + index)
           } else {
             indexed(index) = s
           }
       }
     }
 
-    for (i <- 0 until indexed.length) {
-      if (indexed(i) == null) {
-        indexed(i) = notIndexed.head
-        notIndexed = notIndexed.drop(1)
-      }
+    // Fill empty spots in `indexed` with properties of `notIndexed`.
+    // We try to retain ordering, as received from reflection.
+    indexed.map {
+      e =>
+        if (e == null && !notIndexed.isEmpty) {
+          val (head, rest) = notIndexed.dequeue
+          notIndexed = rest
+          head
+        } else {
+          e
+        }
     }
-
-    indexed
   }
 
   def getAnnotations(prop: Property): List[Annotation] = {
     val Property(_, getter, setter, _) = prop
 
+    // If the getter is a proper Scala getter function, we
+    // can get a reference to its backing field, the `accessed`.
+    // Then we can also read the annotations of the field which is
+    // where scala stores annotations for proper properties :)
     val scalaFieldAnnotations =
       if (getter.isGetter)
         setter.accessed.asTerm.annotations
@@ -101,30 +115,29 @@ trait ScalaPropertyFinder{
       find(_.tpe =:= typeTag[T].tpe)
   }
 
-  def convertToScalaFieldEntry(propInfo: Property) = {
+  def convertToScalaFieldEntry(propInfo: Property): ScalaFieldEntry = {
     val Property(name, getter, setter, _) = propInfo
 
-    getter.returnType match{
-      case pt : ParameterizedType =>
-        new ScalaFieldEntry(name,
-          readFieldOption(propInfo, FieldOption.DEFAULT),
-          ScalaSigUtil.toErasedJavaClass(getter.returnType),
-          ScalaSigUtil.toJavaClass(getter.returnType),
-          ScalaSigUtil.toJavaMethod(getter),
-          ScalaSigUtil.toJavaMethod(setter)
-        )
+    // Depending on the return type of the getter, i.e. the type
+    // of the property, we return a different version of ScalaFieldEntry.
+    getter.returnType match {
+      // We special case Scala Enumerations, as they are constructed
+      // specially. The generic type is actually the type of the companion object.
       case t if t.typeSymbol.fullName == "scala.Enumeration.Value" =>
         new ScalaFieldEntry(name,
           readFieldOption(propInfo, FieldOption.DEFAULT),
-          ScalaSigUtil.toErasedJavaClass(getter.returnType),
-          ScalaSigUtil.getCompanionObjectClass(getter.returnType).get,
+          ScalaSigUtil.toErasedJavaClass(t),
+          ScalaSigUtil.getCompanionObjectClass(t).get,
           ScalaSigUtil.toJavaMethod(getter),
           ScalaSigUtil.toJavaMethod(setter)
         )
+      // A parameterized type contains type arguments, it is generic.
+      // For parameterized types we use the erased type as the normal type
+      // and the fully specified type as the generic type.
       case t =>
         new ScalaFieldEntry(name,
           readFieldOption(propInfo, FieldOption.DEFAULT),
-          ScalaSigUtil.toErasedJavaClass(getter.returnType),
+          ScalaSigUtil.toErasedJavaClass(t),
           ScalaSigUtil.toJavaClass(t),
           ScalaSigUtil.toJavaMethod(getter),
           ScalaSigUtil.toJavaMethod(setter)
@@ -132,11 +145,10 @@ trait ScalaPropertyFinder{
     }
   }
 
-  def readValueType(prop: Property) = {
+  def readValueType(prop: Property): ClassSymbol =
     prop.getter.returnType.typeSymbol.asClass
-  }
 
-  def readFieldOption(prop: Property, implicitOption: FieldOption) = {
+  def readFieldOption(prop: Property, defaultOption: FieldOption): FieldOption =
     if (hasAnnotation[Optional](prop)) {
       FieldOption.OPTIONAL
     } else if (hasAnnotation[NotNullable](prop)) {
@@ -147,9 +159,7 @@ trait ScalaPropertyFinder{
       if (readValueType(prop).isPrimitive) {
         FieldOption.NOTNULLABLE
       } else {
-        implicitOption
+        defaultOption
       }
     }
-
-  }
 }

@@ -37,8 +37,6 @@ object ScalaSigUtil {
   }
 
   def getDefinedProperties(clazz: Class[_]): Seq[Property] = {
-    //    logger.debug("Inspecting class {} for defined properties.", clazz.getName)
-
     val tpe = cm.classSymbol(clazz).toType
 
     val fieldMap = tpe.declarations.collect {
@@ -55,12 +53,8 @@ object ScalaSigUtil {
     // Build a map to speed up lookup of potential getters
     val zeroArgsMap = zeroArgs.map(m => m.name.decoded -> m).toMap
 
-    //    logger.debug("The class contains the following zero argument methods: {}", zeroArgs.map(_.name.decoded))
-
     // Possible setters are all methods, that take exactly one argument
     val oneArg = rest.filter(_.paramss.headOption.exists(_.size == 1))
-
-    //    logger.debug("The class contains the following one argument methods: {}", oneArg.map(_.name.decoded))
 
     // Create the list of all setters, which have a getter with the same
     // name and one parameter with the type of the return type of the getter.
@@ -84,8 +78,6 @@ object ScalaSigUtil {
       if getter.returnType =:= setter.paramss.head.head.typeSignature
     } yield Property(getter.name.encoded, getter, setter, fieldMap.get(cleanName))
 
-    //    logger.debug("The extracted properties are: {}", properties.map(_.name))
-
     properties.toSeq
   }
 
@@ -101,36 +93,46 @@ object ScalaSigUtil {
     cm.runtimeClass(t)
 
   def toJavaClass(t: Type): java.lang.reflect.Type = t match {
-    case TypeRef(prefix, clazz, genericParams) => {
+    case TypeRef(prefix, clazz, genericParams) =>
+      // If we have a scala primitive type, we need to lookup the corresponding
+      // Java primitive type
       val primitive = t.typeSymbol.asClass.isPrimitive
       val nameMapper = if (primitive) mapToPrimitiveJavaName else mapToRefJavaName
 
       if (clazz.fullName == "scala.Array") {
+        // We convert arrays into the special Java array notation.
         val name = toJavaClass(genericParams(0)) match {
           case c: Class[_] if c.isPrimitive => "[" + c.getName.toUpperCase.charAt(0)
           case c: Class[_] => "[L" + c.getName + ";"
           case c: ParameterizedType => "[L" + c.getRawType + ";"
         }
 
+        // And lookup the corresponding Java class
         forName(name)
       } else if (clazz.fullName == "scala.Enumeration.Value") {
+        // On Enums, we actually lookup the prefix type, the enum value is
+        // contained in. (com.example.MyEnum.Value => com.example.MyEnum)
+        // This is neccessary, because an Enumeration could extend eny type
+        // and we would also need to serialize the base class of the Enumeration
+
         prefix match {
-          case SingleType(_, name) => {
-            nameMapper(name.fullName)
-          }
+          case SingleType(_, name) => nameMapper(name.fullName)
         }
       } else if (genericParams.size == 0) {
+        // If we have a non-generic class, we simply translate it
         nameMapper(clazz.fullName)
       } else {
+        // If we have a generic type, we return a helper class, that returns
+        // the correct "name", i.e. Java class name, of the parameterized class.
         new MyParameterizedType(
           nameMapper(clazz.fullName),
           genericParams.map(toJavaClass).toArray
         )
       }
-    }
-    case _ => {
+    case _ =>
+      // If we do not have a TypeRef, we simply try getting the Java class
+      // from reflection.
       cm.runtimeClass(t)
-    }
   }
 
   def annotationArg(an: Annotation, name: String): Option[Constant] =

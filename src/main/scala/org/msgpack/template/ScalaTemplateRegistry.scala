@@ -19,32 +19,26 @@ package org.msgpack.template
 
 import builder._
 import collection.mutable._
-import java.math.BigInteger
-import java.nio.ByteBuffer
-import org.msgpack.`type`.Value
-import org.msgpack.template.TemplateRegistry._
-import java.lang.reflect.Type
-import org.msgpack.scalautil.ScalaSigUtil
-import org.msgpack.MessageTypeException
+import scala.reflect.runtime.universe.TypeTag
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/12 21:21
  */
 
-class ScalaTemplateRegistry extends TemplateRegistry(null){
+class ScalaTemplateRegistry extends TemplateRegistry(null) {
 
-
-
+  // Run all the static initialization in its own scope.
   {
-    //def anyTemplate[T] = AnyTemplate.getInstance(this).asInstanceOf[Template[T]]
-
+    // The AnyTemplate looks up the actual template for reading and writing
+    // from the registry, it is just a proxy template.
     val at = new AnyTemplate[Any](this)
     def anyTemplate[T] = at.asInstanceOf[Template[T]]
+
     register(new ImmutableListTemplate[Any](anyTemplate))
     register(new ImmutableSetTemplate[Any](anyTemplate))
-    register(new ImmutableMapTemplate(anyTemplate,anyTemplate))
+    register(new ImmutableMapTemplate(anyTemplate, anyTemplate))
     register(new DoubleLinkedListTemplate(anyTemplate))
     register(new LinkedListTemplate(anyTemplate))
     register(new ListBufferTemplate(anyTemplate))
@@ -52,57 +46,57 @@ class ScalaTemplateRegistry extends TemplateRegistry(null){
     register(new MutableSetCTemplate(anyTemplate))
     register(new HashSetTemplate(anyTemplate))
     register(new LinkedHashSetTemplate(anyTemplate))
-    register(new MutableHashMapTemplate(anyTemplate,anyTemplate))
-    register(new MutableListMapTemplate(anyTemplate,anyTemplate))
-    register(new MutableLinkedHashMapTemplate(anyTemplate,anyTemplate))
-    register(classOf[scala.collection.mutable.Map[_,_]],
-    new MutableHashMapTemplate(anyTemplate,anyTemplate))
+    register(new MutableHashMapTemplate(anyTemplate, anyTemplate))
+    register(new MutableListMapTemplate(anyTemplate, anyTemplate))
+    register(new MutableLinkedHashMapTemplate(anyTemplate, anyTemplate))
+    register(classOf[scala.collection.mutable.Map[_, _]],
+      new MutableHashMapTemplate(anyTemplate, anyTemplate))
     register(classOf[scala.collection.mutable.Seq[_]],
       new LinkedListTemplate(anyTemplate))
     register(classOf[scala.collection.mutable.Set[_]],
       new LinkedHashSetTemplate(anyTemplate))
     register(classOf[scala.collection.mutable.Set[_]],
       new HashSetTemplate(anyTemplate))
-    register(classOf[Seq[_]],new ImmutableListTemplate(anyTemplate))
-    register(classOf[Set[_]],new ImmutableSetTemplate(anyTemplate))
-    register(classOf[scala.collection.immutable.List[_]],new ImmutableListTemplate[Any](anyTemplate))
-    register(classOf[java.util.Calendar],new CalendarTemplate)
-    register(None.getClass,new OptionTemplate[Any](anyTemplate))
-    register(classOf[Some[_]],new OptionTemplate[Any](anyTemplate))
-    register(classOf[Option[_]],new OptionTemplate[Any](anyTemplate))
-    register(classOf[Either[Any,Any]],new EitherTemplate[Any,Any](anyTemplate,anyTemplate))
-    register(classOf[Left[Any,Any]],new EitherTemplate[Any,Any](anyTemplate,anyTemplate))
-    register(classOf[Right[Any,Any]],new EitherTemplate[Any,Any](anyTemplate,anyTemplate))
+    register(classOf[Seq[_]], new ImmutableListTemplate(anyTemplate))
+    register(classOf[Set[_]], new ImmutableSetTemplate(anyTemplate))
+    register(classOf[scala.collection.immutable.List[_]], new ImmutableListTemplate[Any](anyTemplate))
+    register(classOf[java.util.Calendar], new CalendarTemplate)
+    register(None.getClass, new OptionTemplate[Any](anyTemplate))
+    register(classOf[Some[_]], new OptionTemplate[Any](anyTemplate))
+    register(classOf[Option[_]], new OptionTemplate[Any](anyTemplate))
+    register(classOf[Either[Any, Any]], new EitherTemplate[Any, Any](anyTemplate, anyTemplate))
+    register(classOf[Left[Any, Any]], new EitherTemplate[Any, Any](anyTemplate, anyTemplate))
+    register(classOf[Right[Any, Any]], new EitherTemplate[Any, Any](anyTemplate, anyTemplate))
     //tuples
     register(classOf[Tuple1[_]], new Tuple1Template[Any](anyTemplate))
-    register(classOf[Tuple2[_,_]], new Tuple2Template[Any,Any](anyTemplate,anyTemplate))
-    register(classOf[Tuple3[_,_,_]], new Tuple3Template[Any,Any,Any](anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple4[_,_,_,_]], new Tuple4Template[Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple5[_,_,_,_,_]], new Tuple5Template[Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple6[_,_,_,_,_,_]], new Tuple6Template[Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple7[_,_,_,_,_,_,_]], new Tuple7Template[Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple8[_,_,_,_,_,_,_,_]], new Tuple8Template[Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple9[_,_,_,_,_,_,_,_,_]], new Tuple9Template[Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple10[_,_,_,_,_,_,_,_,_,_]], new Tuple10Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple11[_,_,_,_,_,_,_,_,_,_,_]], new Tuple11Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple12[_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple12Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple13[_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple13Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple14[_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple14Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple15[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple15Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple16[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple16Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple17[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple17Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple18[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple18Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple19[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple19Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple20[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple20Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple21[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple21Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
-    register(classOf[Tuple22[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new Tuple22Template[Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any,Any](anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate,anyTemplate))
+    register(classOf[Tuple2[_, _]], new Tuple2Template[Any, Any](anyTemplate, anyTemplate))
+    register(classOf[Tuple3[_, _, _]], new Tuple3Template[Any, Any, Any](anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple4[_, _, _, _]], new Tuple4Template[Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple5[_, _, _, _, _]], new Tuple5Template[Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple6[_, _, _, _, _, _]], new Tuple6Template[Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple7[_, _, _, _, _, _, _]], new Tuple7Template[Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple8[_, _, _, _, _, _, _, _]], new Tuple8Template[Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple9[_, _, _, _, _, _, _, _, _]], new Tuple9Template[Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple10[_, _, _, _, _, _, _, _, _, _]], new Tuple10Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple11[_, _, _, _, _, _, _, _, _, _, _]], new Tuple11Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple12[_, _, _, _, _, _, _, _, _, _, _, _]], new Tuple12Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple13[_, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple13Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple14[_, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple14Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple15[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple15Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple16[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple16Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple17[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple17Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple18[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple18Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple19[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple19Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple20[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple20Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple21[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple21Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
+    register(classOf[Tuple22[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new Tuple22Template[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any](anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate, anyTemplate))
     // generics
-    registerGeneric(classOf[scala.collection.immutable.List[_]],new GenericImmutableListTemplate())
-    registerGeneric(classOf[scala.collection.immutable.Map[_,_]],new GenericImmutableMapTemplate())
-    registerGeneric(classOf[scala.collection.immutable.Seq[_]],new GenericImmutableListTemplate())
-    registerGeneric(classOf[scala.collection.immutable.Set[_]],new GenericImmutableSetTemplate())
-    registerGeneric(classOf[scala.collection.Seq[_]],new GenericImmutableListTemplate())
-    registerGeneric(classOf[Seq[_]],new GenericImmutableListTemplate())
+    registerGeneric(classOf[scala.collection.immutable.List[_]], new GenericImmutableListTemplate())
+    registerGeneric(classOf[scala.collection.immutable.Map[_, _]], new GenericImmutableMapTemplate())
+    registerGeneric(classOf[scala.collection.immutable.Seq[_]], new GenericImmutableListTemplate())
+    registerGeneric(classOf[scala.collection.immutable.Set[_]], new GenericImmutableSetTemplate())
+    registerGeneric(classOf[scala.collection.Seq[_]], new GenericImmutableListTemplate())
+    registerGeneric(classOf[Seq[_]], new GenericImmutableListTemplate())
 
     registerGeneric(classOf[DoubleLinkedList[_]],
       new GenericMutableListTemplate[DoubleLinkedListTemplate[_]]())
@@ -121,50 +115,51 @@ class ScalaTemplateRegistry extends TemplateRegistry(null){
     registerGeneric(classOf[LinkedHashSet[_]],
       new GenericMutableSetTemplate[LinkedHashSetTemplate[_]]())
 
-    registerGeneric(classOf[LinkedHashMap[_,_]],
-      new GenericMutableMapTemplate[MutableLinkedHashMapTemplate[_,_]])
-    registerGeneric(classOf[HashMap[_,_]],
-      new GenericMutableMapTemplate[MutableHashMapTemplate[_,_]])
-    registerGeneric(classOf[ListMap[_,_]],
-      new GenericMutableMapTemplate[MutableListMapTemplate[_,_]])
-    registerGeneric(classOf[scala.collection.mutable.Map[_,_]],
-      new GenericMutableMapTemplate[MutableHashMapTemplate[_,_]])
-    registerGeneric(classOf[Option[_]],new GenericOptionTemplate)
-    registerGeneric(classOf[Some[_]],new GenericOptionTemplate)
-    registerGeneric(classOf[Either[_,_]],new GenericEitherTemplate)
-    registerGeneric(classOf[Left[_,_]],new GenericEitherTemplate)
-    registerGeneric(classOf[Right[_,_]],new GenericEitherTemplate)
+    registerGeneric(classOf[LinkedHashMap[_, _]],
+      new GenericMutableMapTemplate[MutableLinkedHashMapTemplate[_, _]])
+    registerGeneric(classOf[HashMap[_, _]],
+      new GenericMutableMapTemplate[MutableHashMapTemplate[_, _]])
+    registerGeneric(classOf[ListMap[_, _]],
+      new GenericMutableMapTemplate[MutableListMapTemplate[_, _]])
+    registerGeneric(classOf[scala.collection.mutable.Map[_, _]],
+      new GenericMutableMapTemplate[MutableHashMapTemplate[_, _]])
+    registerGeneric(classOf[Option[_]], new GenericOptionTemplate)
+    registerGeneric(classOf[Some[_]], new GenericOptionTemplate)
+    registerGeneric(classOf[Either[_, _]], new GenericEitherTemplate)
+    registerGeneric(classOf[Left[_, _]], new GenericEitherTemplate)
+    registerGeneric(classOf[Right[_, _]], new GenericEitherTemplate)
 
 
     //tuples
     registerGeneric(classOf[Tuple1[_]], new GenericTuple1Template())
-    registerGeneric(classOf[Tuple2[_,_]], new GenericTuple2Template())
-    registerGeneric(classOf[Tuple3[_,_,_]], new GenericTuple3Template())
-    registerGeneric(classOf[Tuple4[_,_,_,_]], new GenericTuple4Template())
-    registerGeneric(classOf[Tuple5[_,_,_,_,_]], new GenericTuple5Template())
-    registerGeneric(classOf[Tuple6[_,_,_,_,_,_]], new GenericTuple6Template())
-    registerGeneric(classOf[Tuple7[_,_,_,_,_,_,_]], new GenericTuple7Template())
-    registerGeneric(classOf[Tuple8[_,_,_,_,_,_,_,_]], new GenericTuple8Template())
-    registerGeneric(classOf[Tuple9[_,_,_,_,_,_,_,_,_]], new GenericTuple9Template())
-    registerGeneric(classOf[Tuple10[_,_,_,_,_,_,_,_,_,_]], new GenericTuple10Template())
-    registerGeneric(classOf[Tuple11[_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple11Template())
-    registerGeneric(classOf[Tuple12[_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple12Template())
-    registerGeneric(classOf[Tuple13[_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple13Template())
-    registerGeneric(classOf[Tuple14[_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple14Template())
-    registerGeneric(classOf[Tuple15[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple15Template())
-    registerGeneric(classOf[Tuple16[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple16Template())
-    registerGeneric(classOf[Tuple17[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple17Template())
-    registerGeneric(classOf[Tuple18[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple18Template())
-    registerGeneric(classOf[Tuple19[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple19Template())
-    registerGeneric(classOf[Tuple20[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple20Template())
-    registerGeneric(classOf[Tuple21[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple21Template())
-    registerGeneric(classOf[Tuple22[_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_]], new GenericTuple22Template())
+    registerGeneric(classOf[Tuple2[_, _]], new GenericTuple2Template())
+    registerGeneric(classOf[Tuple3[_, _, _]], new GenericTuple3Template())
+    registerGeneric(classOf[Tuple4[_, _, _, _]], new GenericTuple4Template())
+    registerGeneric(classOf[Tuple5[_, _, _, _, _]], new GenericTuple5Template())
+    registerGeneric(classOf[Tuple6[_, _, _, _, _, _]], new GenericTuple6Template())
+    registerGeneric(classOf[Tuple7[_, _, _, _, _, _, _]], new GenericTuple7Template())
+    registerGeneric(classOf[Tuple8[_, _, _, _, _, _, _, _]], new GenericTuple8Template())
+    registerGeneric(classOf[Tuple9[_, _, _, _, _, _, _, _, _]], new GenericTuple9Template())
+    registerGeneric(classOf[Tuple10[_, _, _, _, _, _, _, _, _, _]], new GenericTuple10Template())
+    registerGeneric(classOf[Tuple11[_, _, _, _, _, _, _, _, _, _, _]], new GenericTuple11Template())
+    registerGeneric(classOf[Tuple12[_, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple12Template())
+    registerGeneric(classOf[Tuple13[_, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple13Template())
+    registerGeneric(classOf[Tuple14[_, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple14Template())
+    registerGeneric(classOf[Tuple15[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple15Template())
+    registerGeneric(classOf[Tuple16[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple16Template())
+    registerGeneric(classOf[Tuple17[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple17Template())
+    registerGeneric(classOf[Tuple18[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple18Template())
+    registerGeneric(classOf[Tuple19[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple19Template())
+    registerGeneric(classOf[Tuple20[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple20Template())
+    registerGeneric(classOf[Tuple21[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple21Template())
+    registerGeneric(classOf[Tuple22[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple22Template())
 
     //register(classOf[AnyRef],new DynamicTemplate(this))
   }
 
-  def register[T]( template : Template[T])(implicit manifest : Manifest[T]) : Unit = {
-    this.register(manifest.erasure,template)
+  def register[T](template: Template[T])(implicit tt: TypeTag[T]): Unit = {
+    import scala.reflect.runtime.{currentMirror => cm}
+    this.register(cm.runtimeClass(tt.tpe), template)
   }
 
 
@@ -174,17 +169,17 @@ class ScalaTemplateRegistry extends TemplateRegistry(null){
 
 }
 
-class ScalaTemplateBuilderChain(registry : TemplateRegistry,forceReflectionMode : Boolean) extends TemplateBuilderChain(registry){
+class ScalaTemplateBuilderChain(registry: TemplateRegistry, forceReflectionMode: Boolean) extends TemplateBuilderChain(registry) {
 
-  def this(_registry : TemplateRegistry) = this(_registry,false)
+  def this(_registry: TemplateRegistry) = this(_registry, false)
 
   private def enableDynamicCodeGeneration: Boolean = {
     try {
-      return !forceReflectionMode && !System.getProperty("java.vm.name").equals("Dalvik")
+      !forceReflectionMode && !System.getProperty("java.vm.name").equals("Dalvik")
     }
     catch {
       case e: Exception => {
-        return true
+        true
       }
     }
   }
@@ -194,26 +189,26 @@ class ScalaTemplateBuilderChain(registry : TemplateRegistry,forceReflectionMode 
       throw new NullPointerException("registry is null")
     }
 
-
+    // Register the default templates that never generate code
     templateBuilders.add(new ArrayTemplateBuilder(registry))
     templateBuilders.add(new OrdinalEnumTemplateBuilder(registry))
     templateBuilders.add(new ScalaEnumTemplateBuilder(registry))
+
+    // Check, if we are allowed to generate code
+    // Depending on that either register the Javassist or the
+    // Reflection template builders. In any way, also register
+    // the basic Java template builders from the Java implementetion.
     if (enableDynamicCodeGeneration) {
+      forceBuilder =
+        if (cl != null) new JavassistScalaTemplateBuilder(registry, cl)
+        else new JavassistScalaTemplateBuilder(registry)
 
-      forceBuilder = if (cl != null) {
-        new JavassistScalaTemplateBuilder(registry,cl)
-      }else{
-        new JavassistScalaTemplateBuilder(registry)
+      templateBuilders.add(forceBuilder)
 
-      }
+      val builder =
+        if (cl != null) new JavassistTemplateBuilder(registry, cl)
+        else new JavassistTemplateBuilder(registry)
 
-      val b = forceBuilder
-      templateBuilders.add(b)
-      val builder = if(cl != null ) {
-        new JavassistTemplateBuilder(registry,cl)
-      }else{
-        new JavassistTemplateBuilder(registry)
-      }
       forceBuilder = builder
       templateBuilders.add(builder)
       templateBuilders.add(new JavassistBeansTemplateBuilder(registry))
@@ -222,11 +217,11 @@ class ScalaTemplateBuilderChain(registry : TemplateRegistry,forceReflectionMode 
       forceBuilder = new ReflectionScalaTemplateBuilder(registry)
 
       templateBuilders.add(forceBuilder)
+
       val builder = new ReflectionTemplateBuilder(registry)
       templateBuilders.add(builder)
       templateBuilders.add(new OrdinalEnumTemplateBuilder(registry))
       templateBuilders.add(new ReflectionBeansTemplateBuilder(registry))
     }
-
   }
 }
