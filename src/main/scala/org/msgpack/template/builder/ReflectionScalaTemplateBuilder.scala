@@ -41,18 +41,14 @@ class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
   }
 
   private def toScalaTemplates(entries: Array[FieldEntry]): Array[ReflectionScalaFieldTemplate[AnyRef]] = {
-    val templates: Array[ReflectionScalaFieldTemplate[AnyRef]] = new Array(entries.length)
-    var i = 0
-    for (e <- entries) {
+    entries.map { e =>
       if (e.isAvailable) {
         val template = registry.lookup(e.getGenericType).asInstanceOf[Template[AnyRef]]
-        templates(i) = new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry], template)
+        new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry], template)
       } else {
-        templates(i) = null
+        null
       }
-      i += 1
     }
-    templates
   }
 }
 

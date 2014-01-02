@@ -17,80 +17,60 @@
 //
 package org.msgpack.template.builder
 
-import org.msgpack.unpacker.Unpacker
-import org.msgpack.packer.Packer
-import java.lang.{String, Class}
+import java.lang.Class
 import org.msgpack.template._
-import collection.immutable.ListMap
-import java.lang.annotation.{ Annotation => JAnnotation}
-import java.lang.reflect.{Field, Modifier, Method, Type}
-import org.msgpack.annotation._
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/12 16:39
  */
 
-class JavassistScalaTemplateBuilder(_registry : TemplateRegistry, classLoader : ClassLoader)
-  extends JavassistTemplateBuilder(_registry,classLoader) with ScalaObjectMatcher with ScalaPropertyFinder{
+class JavassistScalaTemplateBuilder(_registry: TemplateRegistry, classLoader: ClassLoader)
+  extends JavassistTemplateBuilder(_registry, classLoader) with ScalaObjectMatcher with ScalaPropertyFinder {
 
-
-  def this(r : TemplateRegistry) = this(r,null)
-
-
+  def this(r: TemplateRegistry) = this(r, null)
 
   val classPool = this.pool
 
-
-  // matching and find properties functions is implemented in trait
-
   // build template
   override def buildTemplate[T](targetClass: Class[T], entries: Array[FieldEntry]) = {
-    val templates : Array[Template[_]] = toTemplates(entries)
-    val bc = new ScalaBuildContext(this)
+    val templates = toTemplates(entries)
+    val bc = createBuildContext()
 
-    //cast manually
-    val sEntries = new Array[ScalaFieldEntry](entries.length)
-    for(i <- 0 until entries.length){
-      sEntries(i) = entries(i).asInstanceOf[ScalaFieldEntry]
-    }
-    bc.buildTemplate(targetClass,sEntries,templates).asInstanceOf[Template[T]]
+//    for (t <- templates) println(t)
+
+    val sEntries = entries.map(_.asInstanceOf[ScalaFieldEntry])
+
+    bc.buildTemplate(targetClass, sEntries, templates).asInstanceOf[Template[T]]
   }
 
-  private def toTemplates[T]( entries : Array[FieldEntry]) = {
-    val templates : Array[Template[_]] = new Array(entries.length)
-    var i = 0
-    for( e <- entries){
-      if(e.isAvailable){
-        val template = registry.lookup(e.getGenericType)
-        templates(i) = template
-      }else{
-        templates(i) = null
-      }
-      i += 1
+  private def toTemplates[T](entries: Array[FieldEntry]) = {
+    entries.map {
+      e =>
+        if (e.isAvailable) {
+          registry.lookup(e.getGenericType)
+        } else {
+          null
+        }
     }
-    templates
   }
-
-
 
   // builder context
   override def createBuildContext() = {
     new ScalaBuildContext(this)
   }
-
 }
 
-abstract class JavassistScalaTemplate[T](var targetClass : Class[T], var templates : Array[Template[_]]) extends AbstractTemplate[T]{
+abstract class JavassistScalaTemplate[T](var targetClass: Class[T], var templates: Array[Template[_]]) extends AbstractTemplate[T] {
 
-  override def toString() = {
+  override def toString = {
 
-    "Template for:" + targetClass + "\n" +
-    "Fields:\n" +
-    templates.map(t => {
-      t.toString
-    }).mkString("\n")
+    "JavassistScalaTemplate for:" + targetClass + "\n" +
+      "Fields:\n" +
+      templates.map(t => {
+        t.toString
+      }).mkString("\n")
   }
 
 }

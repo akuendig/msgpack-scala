@@ -1,6 +1,6 @@
 package org.msgpack.scalautil
 
-import java.lang.reflect.{Field, Method, Type => JType, ParameterizedType}
+import java.lang.reflect.{Type => JType, ParameterizedType}
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
 import org.slf4j.{LoggerFactory, Logger}
@@ -12,14 +12,13 @@ import org.slf4j.{LoggerFactory, Logger}
  */
 
 object ScalaSigUtil {
-  private val logger : Logger = LoggerFactory.getLogger(getClass)
+  private val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  type Property = (Method, Method, Field, MethodSymbol)
-  type PropertySet = (String, Property)
+  case class Property(name: String, getter: MethodSymbol, setter: MethodSymbol, field: Option[TermSymbol])
 
   val SetterSuffix = "_="
 
-  def getAllProperties(clazz: Class[_]): Seq[PropertySet] = {
+  def getAllProperties(clazz: Class[_]): Seq[Property] = {
 
     def superClassProps = {
       val superClass: Class[_] = clazz.getSuperclass
@@ -31,17 +30,21 @@ object ScalaSigUtil {
     }
 
     def interfaceProps = {
-      clazz.getInterfaces.foldLeft(Seq[PropertySet]())((l, i) => l ++ getAllProperties(i))
+      clazz.getInterfaces.foldLeft(Seq[Property]())((l, i) => l ++ getAllProperties(i))
     }
 
     superClassProps ++ interfaceProps ++ getDefinedProperties(clazz)
   }
 
-  def getDefinedProperties(clazz: Class[_]): Seq[PropertySet] = {
-    logger.debug("Inspecting class {} for defined properties.", clazz.getName)
+  def getDefinedProperties(clazz: Class[_]): Seq[Property] = {
+    //    logger.debug("Inspecting class {} for defined properties.", clazz.getName)
 
     val tpe = cm.classSymbol(clazz).toType
-    val fieldMap = clazz.getFields.map(f => f.getName -> f).toMap
+
+    val fieldMap = tpe.declarations.collect {
+      case f if f.isTerm && f.asTerm.isPublic =>
+        f.name.decoded -> f.asTerm
+    }.toMap
 
     // Find all zero argument methods, that are public.
     // Java does not provide info on private methods via reflection.
@@ -52,14 +55,16 @@ object ScalaSigUtil {
     // Build a map to speed up lookup of potential getters
     val zeroArgsMap = zeroArgs.map(m => m.name.decoded -> m).toMap
 
-    logger.debug("The class contains the following zero argument methods: {}", zeroArgs.map(_.name.decoded))
+    //    logger.debug("The class contains the following zero argument methods: {}", zeroArgs.map(_.name.decoded))
 
     // Possible setters are all methods, that take exactly one argument
     val oneArg = rest.filter(_.paramss.headOption.exists(_.size == 1))
 
+    //    logger.debug("The class contains the following one argument methods: {}", oneArg.map(_.name.decoded))
+
     // Create the list of all setters, which have a getter with the same
     // name and one parameter with the type of the return type of the getter.
-    val settersWithGetters = for {
+    val properties = for {
       setter <- oneArg
 
       // Take the decoded name, i.e. prop_=
@@ -77,70 +82,62 @@ object ScalaSigUtil {
 
       // Test if that method has the correct return type
       if getter.returnType =:= setter.paramss.head.head.typeSignature
-    } yield (cleanName, getter, setter)
+    } yield Property(cleanName, getter, setter, fieldMap.get(cleanName))
 
-    logger.debug("The class contains the following one argument methods: {}", oneArg.map(_.name.decoded))
-
-    // Convert the Scala reflection information into Java reflection information
-    val properties = settersWithGetters.map {
-      case (cleanName, getter, setter) =>
-        val javaField = fieldMap.getOrElse(cleanName, null)
-        val javaGetter = clazz.getMethod(getter.name.encoded)
-        val javaSetter = {
-          val param1 = setter.paramss(0)(0).asTerm
-          val param1Tpe = cm.runtimeClass(param1.typeSignature)
-          clazz.getMethod(setter.name.encoded, param1Tpe)
-        }
-
-        val p: Property = (
-          javaGetter,
-          javaSetter,
-          javaField,
-          getter
-        )
-
-        (getter.name.encoded, p)
-    }
-
-    logger.debug("The extracted properties are: {}", properties.map(_._1))
+    //    logger.debug("The extracted properties are: {}", properties.map(_.name))
 
     properties.toSeq
   }
 
-  def getReturnType(methodSymbol: MethodSymbol): Option[JType] = {
-    methodSymbol.returnType match {
-      case NullaryMethodType(returnType) => toJavaClass(returnType)
-      case MethodType(methodParams, returnType) => toJavaClass(returnType)
-      case trt: TypeRef => toJavaClass(trt)
-      case _ => None
-    }
-  }
+  private val cmx = cm.asInstanceOf[ {
+    def methodToJava(sym: scala.reflect.internal.Symbols#MethodSymbol): java.lang.reflect.Method
+  }]
 
-  def toJavaClass(t: Type, primitive_? : Boolean = true): Option[JType] = t match {
-    case TypeRef(pre, sym, genericParams) =>
-      val nameMapper = if (primitive_?) mapToPrimitiveJavaName else mapToRefJavaName
-      if (sym.fullName == "scala.Array") {
-        toJavaClass(genericParams(0), true) match {
-          case Some(c: Class[_]) => if (c.isPrimitive) Some(forName("[" + c.getName.toUpperCase.charAt(0))) else Some(forName("[L" + c.getName + ";"))
-          case Some(c: ParameterizedType) => Some(forName("[L" + c.getRawType + ";"))
-          case _ => throw new Exception("Never match here")
+  def toJavaMethod(m: MethodSymbol): java.lang.reflect.Method = cmx.methodToJava(
+    m.asInstanceOf[scala.reflect.internal.Symbols#MethodSymbol]
+  )
+
+  def toErasedJavaClass(t: Type): java.lang.Class[_] =
+    cm.runtimeClass(t)
+
+  def toJavaClass(t: Type): java.lang.reflect.Type = t match {
+    case TypeRef(prefix, clazz, genericParams) => {
+      val primitive = t.typeSymbol.asClass.isPrimitive
+      val nameMapper = if (primitive) mapToPrimitiveJavaName else mapToRefJavaName
+
+      if (clazz.fullName == "scala.Array") {
+        val name = toJavaClass(genericParams(0)) match {
+          case c: Class[_] if c.isPrimitive => "[" + c.getName.toUpperCase.charAt(0)
+          case c: Class[_] => "[L" + c.getName + ";"
+          case c: ParameterizedType => "[L" + c.getRawType + ";"
         }
-      } else if (sym.fullName == "scala.Enumeration.Value") {
-        pre match {
+
+        forName(name)
+      } else if (clazz.fullName == "scala.Enumeration.Value") {
+        prefix match {
           case SingleType(_, name) => {
-            Some(nameMapper(name.fullName))
+            nameMapper(name.fullName)
           }
         }
       } else if (genericParams.size == 0) {
-        Some(nameMapper(sym.fullName))
+        nameMapper(clazz.fullName)
       } else {
-        Some(new MyParameterizedType(
-          nameMapper(sym.fullName),
-          genericParams.map(p => toJavaClass(p, false).get).toArray))
+        new MyParameterizedType(
+          nameMapper(clazz.fullName),
+          genericParams.map(toJavaClass).toArray
+        )
       }
-    case _ =>
-      None
+    }
+    case _ => {
+      cm.runtimeClass(t)
+    }
   }
+
+  def annotationArg(an: Annotation, name: String): Option[Constant] =
+    an.javaArgs.get(TermName(name)).flatMap {
+      case LiteralArgument(ct: Constant) => Some(ct)
+      case _ => None
+    }
 
   def forName(name: String) = Class.forName(name)
 
@@ -201,21 +198,18 @@ object ScalaSigUtil {
     )).toMap
   }
 
-  def getCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {
-    if (clazz.getName.endsWith("$")) None
-    else {
-      try {
-        val c = Class.forName(clazz.getName + "$")
-        Some(c)
-      } catch {
-        case e: NoClassDefFoundError => {
-          None
-        }
-        case e: ClassNotFoundException => {
-          None
-        }
-      }
-    }
+  def getCompanionObjectClass(tpe: Type): Option[Type] = {
+    // Get the Java class because that way we correctly transalte enum
+    // Values. We use a mirror to get back
+    val javaClass =
+      toJavaClass(tpe).asInstanceOf[Class[_]]
+    val companion =
+      cm.classSymbol(javaClass).companionSymbol
+
+    if (companion == NoSymbol) {
+      None
+    } else
+      Some(companion.typeSignature)
   }
 
   def reverseCompanionObjectClass(clazz: Class[_]): Option[Class[_]] = {

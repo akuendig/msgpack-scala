@@ -21,7 +21,7 @@ import org.msgpack.template.FieldOption
 import java.lang.reflect.{Method, Type}
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/12 17:36
  */
@@ -36,11 +36,11 @@ class ScalaFieldEntry(name : String,
 
 
 
-  def getName = name
+  def getName: String = name
 
-  def getType = normalType
+  def getType: Class[_] = normalType
 
-  def getGenericType = genericType
+  def getGenericType: Type = genericType
 
   def primitive_? = {
     getType.isPrimitive
@@ -58,11 +58,11 @@ class ScalaFieldEntry(name : String,
     option == FieldOption.OPTIONAL
   }
 
-  def get(target: AnyRef) = {
+  def get(target: AnyRef): AnyRef = {
     getter.invoke(target)
   }
 
-  def set(target: AnyRef, value: AnyRef) = {
+  def set(target: AnyRef, value: AnyRef): Unit = {
     setter.invoke(target,value)
   }
 }
