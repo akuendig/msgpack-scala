@@ -21,7 +21,6 @@ import org.msgpack.unpacker.Unpacker
 import org.msgpack.packer.Packer
 import org.msgpack.template.{AbstractTemplate, TemplateRegistry, Template}
 import org.msgpack.MessageTypeException
-import java.lang.Class
 
 /**
  *
@@ -53,41 +52,81 @@ class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
  * Store companion object
  */
 object CompanionObjectMap {
+  import scala.reflect.runtime.universe._
+  import scala.reflect.runtime.{ currentMirror => cm }
+  import scala.language.reflectiveCalls
 
-  type CompanionObject = {def apply(): Any}
+  type Constructor = (() => Any)
 
-  var companions = Map[Class[_], CompanionObject]()
+  // This is a static "constructor" we store when we cannot find a constructor
+  private val throwingConstructor =
+    () => throw new MessageTypeException("Can't find plain constructor or companion object")
 
-  def newInstance(clazz: Class[_]) = companions.synchronized {
-    if (companions.contains(clazz)) {
-      companions(clazz).apply()
-    } else {
-      try {
-        clazz.newInstance
-      } catch {
-        case e: InstantiationException => {
-          val c = registerCompanionObject(clazz)
-          c.apply()
-        }
-      }
+  // Lock and cache of constructors
+  private val constructorsLock = new Object()
+  private var constructors = Map.empty[Class[_], Constructor]
+
+  def newInstance(clazz: Class[_]): Any = {
+    val ctor = getOrCreate(clazz)
+
+    ctor()
+  }
+
+  // Threadsafe method to lookup or write a new entry to the constructor cache
+  private def getOrCreate(clazz: Class[_]): Constructor = constructorsLock.synchronized {
+    if (constructors.contains(clazz))
+      constructors(clazz)
+    else {
+      val constructor = createConstructor(clazz)
+
+      constructors += clazz -> constructor
+
+      constructor
     }
   }
 
-  def registerCompanionObject(clazz: Class[_]): CompanionObject = {
-    try {
-      val companion = clazz.getClassLoader.loadClass(clazz.getName + "$").getDeclaredField("MODULE$").get(null).asInstanceOf[CompanionObject]
-      companions += (clazz -> companion)
-      companion
-    } catch {
-      case e: ClassNotFoundException => {
-        throw new MessageTypeException("Can't find plain constructor or companion object")
-      }
-      case e: NoSuchFieldException => {
-        throw new MessageTypeException("Can't find plain constructor or companion object")
-      }
+  // Helper to check for companion
+  private def hasCompanion(cls: ClassSymbol): Boolean =
+    cls.companionSymbol != NoSymbol
+
+  // Create a constructor either from a direct constructor or
+  // the companion objects's apply method.
+  private def createConstructor(clazz: Class[_]): Constructor = {
+    // Enter Scala reflection world
+    val classSymbol = cm.classSymbol(clazz)
+    val classType = classSymbol.typeSignature
+
+    // It is a constructor, if it is a method, a constructor, and
+    // takes no parameters
+    val hasEmptyConstructor = classType.declarations.exists {
+      d =>
+        d.isMethod &&
+        d.asMethod.isConstructor &&
+        d.asMethod.paramss == List(List())
+    }
+
+    // We just return the java constructor method. This is
+    // cleaner than making the full reflective call via Scala.
+    if (hasEmptyConstructor)
+      return clazz.newInstance
+
+    // If there is no companion, we stop here.
+    if (!hasCompanion(classSymbol))
+      throwingConstructor
+
+    // This type is used to make a reflective call to an empty apply() method.
+    type EmptyApply = { def apply(): Any }
+
+    // Get to the companion symbol via reflection
+    val companionSymbol = classSymbol.companionSymbol.asModule
+    val companionInstance = cm.reflectModule(companionSymbol).instance
+
+    // Use the structural type to check, if there is an empty apply() method.
+    companionInstance match {
+      case withApply: EmptyApply => withApply.apply
+      case _ => throwingConstructor
     }
   }
-
 }
 
 class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
@@ -96,9 +135,13 @@ class ReflectionScalaTemplate[T <: AnyRef](var targetClass: Class[T],
     if (!required && unpacker.trySkipNil) {
       return null.asInstanceOf[T]
     }
-    val to: T = if (base == null) {
-      CompanionObjectMap.newInstance(targetClass).asInstanceOf[T]
-    } else base
+
+    val to: T =
+      if (base == null)
+        CompanionObjectMap.newInstance(targetClass).asInstanceOf[T]
+      else
+        base
+
     unpacker.readArrayBegin
     var i: Int = 0
     while (i < templates.length) {

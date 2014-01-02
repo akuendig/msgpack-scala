@@ -1,9 +1,8 @@
 package org.msgpack.scalautil
 
-import java.lang.reflect.{Type => JType, ParameterizedType}
+import java.lang.reflect.{Type => JType, ParameterizedType => JParameterizedType}
 import scala.reflect.runtime.{currentMirror => cm}
 import scala.reflect.runtime.universe._
-import org.slf4j.{LoggerFactory, Logger}
 
 /**
  *
@@ -12,16 +11,14 @@ import org.slf4j.{LoggerFactory, Logger}
  */
 
 object ScalaSigUtil {
-  private val logger: Logger = LoggerFactory.getLogger(getClass)
-
   case class Property(name: String, getter: MethodSymbol, setter: MethodSymbol, field: Option[TermSymbol])
 
   val SetterSuffix = "_="
 
   def getAllProperties(clazz: Class[_]): Seq[Property] = {
-
     def superClassProps = {
       val superClass: Class[_] = clazz.getSuperclass
+
       if (superClass == null || superClass == classOf[java.lang.Object]) {
         Nil
       } else {
@@ -104,7 +101,7 @@ object ScalaSigUtil {
         val name = toJavaClass(genericParams(0)) match {
           case c: Class[_] if c.isPrimitive => "[" + c.getName.toUpperCase.charAt(0)
           case c: Class[_] => "[L" + c.getName + ";"
-          case c: ParameterizedType => "[L" + c.getRawType + ";"
+          case c: JParameterizedType => "[L" + c.getRawType + ";"
         }
 
         // And lookup the corresponding Java class
@@ -201,13 +198,17 @@ object ScalaSigUtil {
   }
 
   def getCompanionObjectClass(tpe: Type): Option[Class[_]] = {
-    // Get the Java class because that way we correctly translate enum
-    // Values. We use a mirror to get back
+    // Get the Java class because there way we correctly translate Enumeration Values.
+    // We use a mirror to get back a java.lang.reflection.Class
     val javaClass =
       toJavaClass(tpe).asInstanceOf[Class[_]]
+
+    // Get the companion symbol. The companion symbol is a TermSymbol, NOT a ClassSymbol.
+    // Thus we use the typeSignature to get the class of the companion.
     val companion =
       cm.classSymbol(javaClass).companionSymbol
 
+    // NoSymbol is returned if there is not companion symbol.
     if (companion == NoSymbol) None
     else Some(cm.runtimeClass(companion.typeSignature))
   }
@@ -224,11 +225,10 @@ object ScalaSigUtil {
       }
     }
   }
-
 }
 
 
-class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extends ParameterizedType {
+class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extends JParameterizedType {
   def getActualTypeArguments: Array[JType] = paramClasses
 
   def getRawType: JType = rowClass
