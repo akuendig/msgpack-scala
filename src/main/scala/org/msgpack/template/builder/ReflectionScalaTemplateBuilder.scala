@@ -36,21 +36,17 @@ class ReflectionScalaTemplateBuilder(registry: TemplateRegistry)
     if (entries == null) {
       throw new NullPointerException("entries is null: " + targetClass)
     }
+    
     val templates = toScalaTemplates(entries)
     new ReflectionScalaTemplate[AnyRef](targetClass.asInstanceOf[Class[AnyRef]], templates).asInstanceOf[Template[T]]
   }
 
-  private def toScalaTemplates(entries: Array[FieldEntry]): Array[ReflectionScalaFieldTemplate[AnyRef]] = {
-    entries.map {
-      e =>
-        if (e.isAvailable) {
-          val template = registry.lookup(e.getGenericType).asInstanceOf[Template[AnyRef]]
-          new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry], template)
-        } else {
-          null
-        }
+  private def toScalaTemplates(entries: Array[FieldEntry]): Array[ReflectionScalaFieldTemplate[AnyRef]] =
+    entries.collect {
+      case e if e.isAvailable =>
+        val template = registry.lookup(e.getGenericType).asInstanceOf[Template[AnyRef]]
+        new ReflectionScalaFieldTemplate(e.asInstanceOf[ScalaFieldEntry], template)
     }
-  }
 }
 
 /**

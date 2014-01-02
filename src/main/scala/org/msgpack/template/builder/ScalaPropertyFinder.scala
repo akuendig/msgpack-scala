@@ -38,7 +38,7 @@ trait ScalaPropertyFinder{
   val logger = LoggerFactory.getLogger(getClass)
 
   override def toFieldEntries(targetClass: Class[_], from: FieldOption) : Array[FieldEntry] = {
-    val props = ScalaSigUtil.getAllProperties(targetClass)
+    val props = ScalaSigUtil.getAllProperties(targetClass).filter(_ != null)
     val indexed = indexing(props)
 
     indexed.map(convertToScalaFieldEntry)
@@ -104,8 +104,6 @@ trait ScalaPropertyFinder{
   def convertToScalaFieldEntry(propInfo: Property) = {
     val Property(name, getter, setter, _) = propInfo
 
-//    println(s"$name: ${getter.returnType} | ${getter.returnType.typeSymbol.fullName} | ${ScalaSigUtil.toErasedJavaClass(getter.returnType).getName}")
-
     getter.returnType match{
       case pt : ParameterizedType =>
         new ScalaFieldEntry(name,
@@ -119,8 +117,7 @@ trait ScalaPropertyFinder{
         new ScalaFieldEntry(name,
           readFieldOption(propInfo, FieldOption.DEFAULT),
           ScalaSigUtil.toErasedJavaClass(getter.returnType),
-          ScalaSigUtil.getCompanionObjectClass(getter.returnType).
-            get,
+          ScalaSigUtil.getCompanionObjectClass(getter.returnType).get,
           ScalaSigUtil.toJavaMethod(getter),
           ScalaSigUtil.toJavaMethod(setter)
         )
