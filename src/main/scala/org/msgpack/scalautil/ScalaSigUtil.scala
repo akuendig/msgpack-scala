@@ -2,9 +2,7 @@ package org.msgpack.scalautil
 
 import java.lang.reflect.{Type => JType, ParameterizedType => JParameterizedType}
 import scala.reflect.runtime.{currentMirror => cm}
-import scala.reflect.runtime.universe.{NoSymbol, MethodSymbol, TermSymbol}
-import scala.reflect.runtime.universe.{typeOf, TypeTag, Type, TypeRef, SingleType}
-import scala.reflect.runtime.universe.{Annotation, TermName, Constant, LiteralArgument}
+import scala.reflect.runtime.universe._
 import scala.language.reflectiveCalls
 
 /**
