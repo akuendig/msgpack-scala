@@ -2,7 +2,10 @@ package org.msgpack.scalautil
 
 import java.lang.reflect.{Type => JType, ParameterizedType => JParameterizedType}
 import scala.reflect.runtime.{currentMirror => cm}
-import scala.reflect.runtime.universe._
+import scala.reflect.runtime.universe.{NoSymbol, MethodSymbol, TermSymbol}
+import scala.reflect.runtime.universe.{typeOf, TypeTag, Type, TypeRef, SingleType}
+import scala.reflect.runtime.universe.{Annotation, TermName, Constant, LiteralArgument}
+import scala.language.reflectiveCalls
 
 /**
  *
@@ -11,6 +14,7 @@ import scala.reflect.runtime.universe._
  */
 
 object ScalaSigUtil {
+
   case class Property(name: String, getter: MethodSymbol, setter: MethodSymbol, field: Option[TermSymbol])
 
   val SetterSuffix = "_="
@@ -241,16 +245,14 @@ class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extend
 }
 
 object MyParameterizedType {
-  def apply(m: Manifest[_]): MyParameterizedType = {
-    new MyParameterizedType(m.runtimeClass, m.typeArguments.map(MyParameterizedType.apply).toArray)
-  }
-
   def apply[T: TypeTag](): MyParameterizedType =
     apply(typeOf[T])
 
   def apply(t: Type): MyParameterizedType = {
     val clazz = cm.runtimeClass(t)
-    val typeParams = t match { case TypeRef(_, _, args) => args }
+    val typeParams = t match {
+      case TypeRef(_, _, args) => args
+    }
     val jTypeParams = typeParams.map(tp => apply(tp).asInstanceOf[JType]).toArray
 
     new MyParameterizedType(clazz, jTypeParams)
