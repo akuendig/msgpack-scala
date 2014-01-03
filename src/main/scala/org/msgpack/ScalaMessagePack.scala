@@ -62,6 +62,8 @@ class ScalaMessagePack extends MessagePack(new ScalaTemplateRegistry()) {}
  * name is changed because
  */
 trait ScalaMessagePackWrapper {
+  import scala.reflect.runtime.{ currentMirror => cm }
+  import scala.reflect.runtime.universe.{ typeOf, TypeTag }
 
   def messagePack: MessagePack
 
@@ -85,36 +87,40 @@ trait ScalaMessagePackWrapper {
     messagePack.write(value)
   }
 
-  def read[T](data: Array[Byte])(implicit manifest: Manifest[T]): T = {
-    if (manifest.typeArguments.size > 0) {
-      val t = messagePack.lookup(MyParameterizedType(manifest))
+  def read[T: TypeTag](data: Array[Byte]): T = {
+    val tpe = typeOf[T]
+
+    if (tpe.typeSymbol.asClass.typeParams.size > 0) {
+      val t = messagePack.lookup(MyParameterizedType[T]())
       messagePack.read(data, t).asInstanceOf[T]
     } else {
-      messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
+      messagePack.read(data, cm.runtimeClass(tpe)).asInstanceOf[T]
     }
   }
 
-  def read[T](data: InputStream)(implicit manifest: Manifest[T]): T = {
-    if (manifest.typeArguments.size > 0) {
-      val t = messagePack.lookup(MyParameterizedType(manifest))
+  def read[T: TypeTag](data: InputStream): T = {
+    val tpe = typeOf[T]
+
+    if (tpe.typeSymbol.asClass.typeParams.size > 0) {
+      val t = messagePack.lookup(MyParameterizedType[T]())
       messagePack.read(data, t).asInstanceOf[T]
     } else {
-      messagePack.read(data, manifest.runtimeClass.asInstanceOf[Class[T]])
+      messagePack.read(data, cm.runtimeClass(tpe)).asInstanceOf[T]
     }
   }
 
   /**
    * This is synonym for read.
    */
-  def unpack[T](data: Array[Byte])(implicit manifest: Manifest[T]): T = {
-    read(data)(manifest)
+  def unpack[T: TypeTag](data: Array[Byte]): T = {
+    read(data)
   }
 
   /**
    * This is synonym for read.
    */
-  def unpack[T](data: InputStream)(implicit manifest: Manifest[T]): T = {
-    read(data)(manifest)
+  def unpack[T: TypeTag](data: InputStream): T = {
+    read(data)
   }
 
   def readTo[T](data: Array[Byte], obj: T): T = {
@@ -133,7 +139,9 @@ trait ScalaMessagePackWrapper {
     messagePack.read(data)
   }
 
-  def convert[T](value: Value)(implicit manifest: Manifest[T]) = {
-    messagePack.convert(value, manifest.runtimeClass)
+  def convert[T: TypeTag](value: Value) = {
+    val tpe = typeOf[T]
+
+    messagePack.convert(value, cm.runtimeClass(tpe))
   }
 }
