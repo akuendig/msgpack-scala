@@ -41,7 +41,9 @@ trait ScalaPropertyFinder {
     val indexed = indexing(props)
 
     // Convert them to field entries
-    indexed.map(convertToScalaFieldEntry)
+    val converted = indexed.map(convertToScalaFieldEntry).toArray[FieldEntry]
+
+    converted
   }
 
   def indexing(props: Seq[Property]): Array[Property] = {
@@ -89,29 +91,15 @@ trait ScalaPropertyFinder {
     }
   }
 
-  def getAnnotations(prop: Property): List[Annotation] = {
-    val Property(_, getter, setter, _) = prop
-
-    // If the getter is a proper Scala getter function, we
-    // can get a reference to its backing field, the `accessed`.
-    // Then we can also read the annotations of the field which is
-    // where scala stores annotations for proper properties :)
-    val scalaFieldAnnotations =
-      if (getter.isGetter)
-        setter.accessed.asTerm.annotations
-      else
-        Nil
-
-    getter.annotations ++ scalaFieldAnnotations ++ setter.annotations
-  }
-
   def hasAnnotation[T <: JAnnotation : TypeTag](prop: Property): Boolean = {
-    getAnnotations(prop).
+    prop.
+      annotations().
       exists(_.tpe =:= typeTag[T].tpe)
   }
 
   def getAnnotation[T <: JAnnotation : TypeTag](prop: Property): Option[Annotation] = {
-    getAnnotations(prop).
+    prop.
+      annotations().
       find(_.tpe =:= typeTag[T].tpe)
   }
 
@@ -120,7 +108,7 @@ trait ScalaPropertyFinder {
 
     // Depending on the return type of the getter, i.e. the type
     // of the property, we return a different version of ScalaFieldEntry.
-    getter.returnType match {
+    propInfo.tpe match {
       // We special case Scala Enumerations, as they are constructed
       // specially. The generic type is actually the type of the companion object.
       case t if t.typeSymbol.fullName == "scala.Enumeration.Value" =>
@@ -146,7 +134,7 @@ trait ScalaPropertyFinder {
   }
 
   def readValueType(prop: Property): ClassSymbol =
-    prop.getter.returnType.typeSymbol.asClass
+    prop.tpe.typeSymbol.asClass
 
   def readFieldOption(prop: Property, defaultOption: FieldOption): FieldOption =
     if (hasAnnotation[Optional](prop)) {

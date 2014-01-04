@@ -18,7 +18,7 @@
 
 package org.msgpack.conversion
 
-import org.msgpack.scalautil.MyParameterizedType
+import org.msgpack.scalautil.ScalaSigUtil
 import org.msgpack.MessagePack
 import org.msgpack.`type`.{ValueFactory, Value}
 import scala.reflect.runtime.universe._
@@ -61,26 +61,26 @@ class RichValue(messagePack: MessagePack, value: Value) {
   }
 
   def asArray[T: TypeTag]: Array[T] = {
-    val templ = messagePack.lookup(MyParameterizedType[Array[T]]())
+    val templ = messagePack.lookup(ScalaSigUtil.javaClass[Array[T]])
 
     messagePack.convert(value, templ).asInstanceOf[Array[T]]
   }
 
   def asList[T: TypeTag]: List[T] = {
-    val templ = messagePack.lookup(MyParameterizedType[List[T]]())
+    val templ = messagePack.lookup(ScalaSigUtil.javaClass[List[T]])
 
     messagePack.convert(value, templ).asInstanceOf[List[T]]
   }
 
   def as[T: TypeTag]: T = {
-    val templ = messagePack.lookup(MyParameterizedType[T]())
+    val templ = messagePack.lookup(ScalaSigUtil.javaClass[T])
 
     messagePack.convert(value, templ).asInstanceOf[T]
   }
 
   def asMap[K: TypeTag, V: TypeTag]: Map[K, V] = {
-    val keyTemp = messagePack.lookup(MyParameterizedType[K]())
-    val valTemp = messagePack.lookup(MyParameterizedType[V]())
+    val keyTemp = messagePack.lookup(ScalaSigUtil.javaClass[K])
+    val valTemp = messagePack.lookup(ScalaSigUtil.javaClass[V])
 
     val entries = for {
       Array(key, value) <- value.asMapValue().getKeyValueArray.grouped(2)

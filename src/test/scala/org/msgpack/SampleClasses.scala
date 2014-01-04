@@ -64,7 +64,26 @@ object Country extends Enumeration{
 }
 */
 
+@Message
+case class CaseClassTypeClass[T: Numeric](var value: T) {
+  def this() = this(implicitly[Numeric[T]].zero)
+}
 
+object CaseClassTypeClass {
+  def apply[T: Numeric]() = new CaseClassTypeClass[T]()
+}
+
+@Message
+case class GenericCaseClass[T <: AnyRef](var value: T = null)
+
+@Message
+case class CaseClass(var value: Float) {
+  def this() = this(12.0f)
+}
+
+object CaseClass {
+  def apply() = new CaseClass()
+}
 
 @Message
 class Indexing{

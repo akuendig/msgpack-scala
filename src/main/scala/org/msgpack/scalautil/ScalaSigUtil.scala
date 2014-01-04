@@ -13,7 +13,37 @@ import scala.language.reflectiveCalls
 
 object ScalaSigUtil {
 
-  case class Property(name: String, getter: MethodSymbol, setter: MethodSymbol, field: Option[TermSymbol])
+  case class Property(name: String, getter: MethodSymbol, setter: MethodSymbol, parent: Type) {
+
+    // Find the type parameters for the parent, i.e. the class holding the property
+    private val parentTypeParams = parent.typeSymbol.asClass.typeParams
+    private val parentTypeArgs = parent match {
+      case TypeRef(_, _, args) => args
+    }
+    private val parentTypeMap = (parentTypeParams, parentTypeArgs).zipped
+
+    val tpe: Type =
+      parentTypeMap.
+        find(_._1.asType.toType =:= getter.returnType).
+        map(_._2).
+        getOrElse(getter.returnType)
+
+//    println(s"$parent: ${getter.returnType} in ${parentTypeMap.mkString("[", ", ", "]")} is $tpe")
+
+    def annotations(): List[Annotation] = {
+      // If the getter is a proper Scala getter function, we
+      // can get a reference to its backing field, the `accessed`.
+      // Then we can also read the annotations of the field which is
+      // where scala stores annotations for proper properties :)
+      val scalaFieldAnnotations =
+        if (getter.isGetter)
+          setter.accessed.asTerm.annotations
+        else
+          Nil
+
+      getter.annotations ++ scalaFieldAnnotations ++ setter.annotations
+    }
+  }
 
   val SetterSuffix = "_="
 
@@ -35,7 +65,7 @@ object ScalaSigUtil {
     superClassProps ++ interfaceProps ++ getDefinedProperties(clazz)
   }
 
-  def getDefinedProperties(clazz: Class[_]): Seq[Property] = {
+  private def getDefinedProperties(clazz: Class[_]): Seq[Property] = {
     val tpe = cm.classSymbol(clazz).toType
 
     val fieldMap = tpe.declarations.collect {
@@ -75,7 +105,7 @@ object ScalaSigUtil {
 
       // Test if that method has the correct return type
       if getter.returnType =:= setter.paramss.head.head.typeSignature
-    } yield Property(getter.name.encoded, getter, setter, fieldMap.get(cleanName))
+    } yield Property(getter.name.encoded, getter, setter, tpe)
 
     properties.toSeq
   }
@@ -87,6 +117,12 @@ object ScalaSigUtil {
   def toJavaMethod(m: MethodSymbol): java.lang.reflect.Method = cmx.methodToJava(
     m.asInstanceOf[scala.reflect.internal.Symbols#MethodSymbol]
   )
+
+  def erasedJavaClass[T: TypeTag]: java.lang.Class[_] =
+    toErasedJavaClass(typeOf[T])
+
+  def javaClass[T: TypeTag]: java.lang.reflect.Type =
+    toJavaClass(typeOf[T])
 
   def toErasedJavaClass(t: Type): java.lang.Class[_] =
     cm.runtimeClass(t)
@@ -140,9 +176,9 @@ object ScalaSigUtil {
       case _ => None
     }
 
-  def forName(name: String) = Class.forName(name)
+  private def forName(name: String) = Class.forName(name)
 
-  trait MapToJavaName extends ((String) => Class[_]) {
+  private trait MapToJavaName extends ((String) => Class[_]) {
     val nameMap: Map[String, Class[_]]
 
     def apply(scalaClassName: String): Class[_] = {
@@ -155,7 +191,7 @@ object ScalaSigUtil {
     }
   }
 
-  val commonNameMaps: Seq[(String, Class[_])] = Seq(
+  private val commonNameMaps: Seq[(String, Class[_])] = Seq(
     "scala.Predef.String" -> classOf[java.lang.String],
     "scala.Predef.List" -> classOf[List[_]],
     "scala.Predef.Map" -> classOf[Map[_, _]],
@@ -172,10 +208,11 @@ object ScalaSigUtil {
     "scala.package.Seq" -> classOf[Seq[_]],
     "scala.package.Set" -> classOf[Set[_]],
     "scala.package.Either" -> classOf[Either[_, _]],
-    "scala.Unit" -> classOf[java.lang.Void]
+    "scala.Unit" -> classOf[Unit],
+    "scala.Nothing" -> classOf[Unit]
   )
 
-  object mapToRefJavaName extends MapToJavaName {
+  private object mapToRefJavaName extends MapToJavaName {
     val nameMap = (commonNameMaps ++ Seq(
       "scala.Int" -> classOf[java.lang.Integer],
       "scala.Byte" -> classOf[java.lang.Byte],
@@ -187,7 +224,7 @@ object ScalaSigUtil {
     )).toMap
   }
 
-  object mapToPrimitiveJavaName extends MapToJavaName {
+  private object mapToPrimitiveJavaName extends MapToJavaName {
     val nameMap = (commonNameMaps ++ Seq(
       "scala.Int" -> java.lang.Integer.TYPE,
       "scala.Byte" -> java.lang.Byte.TYPE,
@@ -230,7 +267,7 @@ object ScalaSigUtil {
 }
 
 
-class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extends JParameterizedType {
+private class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extends JParameterizedType {
   def getActualTypeArguments: Array[JType] = paramClasses
 
   def getRawType: JType = rowClass
@@ -242,7 +279,7 @@ class MyParameterizedType(rowClass: Class[_], paramClasses: Array[JType]) extend
   }
 }
 
-object MyParameterizedType {
+private object MyParameterizedType {
   def apply[T: TypeTag](): MyParameterizedType =
     apply(typeOf[T])
 
@@ -251,7 +288,7 @@ object MyParameterizedType {
     val typeParams = t match {
       case TypeRef(_, _, args) => args
     }
-    val jTypeParams = typeParams.map(tp => apply(tp).asInstanceOf[JType]).toArray
+    val jTypeParams = typeParams.map(tp => ScalaSigUtil.toJavaClass(tp)).toArray
 
     new MyParameterizedType(clazz, jTypeParams)
   }

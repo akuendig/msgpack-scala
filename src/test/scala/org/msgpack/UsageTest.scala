@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
 import org.specs2.mutable.SpecificationWithJUnit
 
 /**
- * 
+ *
  * User: takeshita
  * Create: 11/10/12 23:17
  */
@@ -68,7 +68,7 @@ class UsageTest extends SpecificationWithJUnit{
       user.roles = Array("user")
       user.profile.gender = 2
 
-      val data = pack(user)
+      val data = write(user)
       val value = readAsValue(data)
 
       val id : Long = value(0) // valueToArray then valueToInt
@@ -76,7 +76,7 @@ class UsageTest extends SpecificationWithJUnit{
       val name : String = value(1)// valueToArray then valueToStr
       name must_== user.name
 
-      val roles : Array[String] = value(2).asArray // valueToRichValue then call asArray
+      val roles : Array[String] = value(2).asArray[String] // valueToRichValue then call asArray
       roles.toList must_== user.roles.toList
 
       val gender : Int = value(3)(0) // valueToArray then call apply(Int) then valueToInt
@@ -88,7 +88,7 @@ class UsageTest extends SpecificationWithJUnit{
       val v = List(1242,"kotori",Array("user","admin"),List(2))
       val data = writeV(v)
 
-      val decoded : User = unpack[User](data)
+      val decoded : User = read[User](data)
       decoded.id must_== v(0)
       decoded.name must_== v(1)
       decoded.roles.toList must_== v(2).asInstanceOf[Array[String]].toList

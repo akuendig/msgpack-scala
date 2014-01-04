@@ -65,4 +65,8 @@ class ScalaFieldEntry(name : String,
   def set(target: AnyRef, value: AnyRef): Unit = {
     setter.invoke(target,value)
   }
+
+  override def toString = {
+    s"ScalaFieldEntry with name $name, type $genericType, getter $getter and setter $setter"
+  }
 }

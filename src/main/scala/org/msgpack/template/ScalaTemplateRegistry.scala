@@ -155,6 +155,7 @@ class ScalaTemplateRegistry extends TemplateRegistry(null) {
     registerGeneric(classOf[Tuple22[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]], new GenericTuple22Template())
 
     //register(classOf[AnyRef],new DynamicTemplate(this))
+    register(classOf[Unit], new UnitTemplate())
   }
 
   def register[T](template: Template[T])(implicit tt: TypeTag[T]): Unit = {
@@ -166,7 +167,6 @@ class ScalaTemplateRegistry extends TemplateRegistry(null) {
   override def createTemplateBuilderChain() = {
     new ScalaTemplateBuilderChain(this)
   }
-
 }
 
 class ScalaTemplateBuilderChain(registry: TemplateRegistry, forceReflectionMode: Boolean) extends TemplateBuilderChain(registry) {

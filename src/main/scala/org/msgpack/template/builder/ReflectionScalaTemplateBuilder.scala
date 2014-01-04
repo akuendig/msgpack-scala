@@ -97,6 +97,29 @@ object ConstructorMap {
     val classSymbol = cm.classSymbol(clazz)
     val classType = classSymbol.typeSignature
 
+    val emptyConstructorOpt = emptyConstructor(clazz, classType)
+
+    if (emptyConstructorOpt.isDefined)
+      return emptyConstructorOpt.get
+
+    // If there is no companion, we stop here, as there is no apply method
+    // and no default arguments for the constructor.
+    if (!hasCompanion(classSymbol))
+      throwingConstructor
+
+    // Get to the companion symbol via reflection
+    val companionSymbol = classSymbol.companionSymbol.asModule
+    val companionType = companionSymbol.typeSignature
+
+    val constructorOrApply =
+      constructorWithDefaultArgs(companionSymbol, companionType, classType).
+        orElse(emptyApply(companionSymbol, companionType)).
+        orElse(applyWithDefaultArgs(companionSymbol, companionType, classType))
+
+    constructorOrApply.getOrElse(throwingConstructor)
+  }
+
+  private def emptyConstructor(clazz: Class[_], classType: Type): Option[Constructor] = {
     // It is a constructor, if it is a method, a constructor, and
     // takes no parameters
     val hasEmptyConstructor = classType.declarations.exists {
@@ -108,25 +131,152 @@ object ConstructorMap {
 
     // We just return the java constructor method. This is
     // cleaner than making the full reflective call via Scala.
-    if (hasEmptyConstructor)
-      return clazz.newInstance
-
-    // If there is no companion, we stop here.
-    if (!hasCompanion(classSymbol))
-      throwingConstructor
-
-    // This type is used to make a reflective call to an empty apply() method.
-    type EmptyApply = {def apply(): Any}
-
-    // Get to the companion symbol via reflection
-    val companionSymbol = classSymbol.companionSymbol.asModule
-    val companionInstance = cm.reflectModule(companionSymbol).instance
-
-    // Use the structural type to check, if there is an empty apply() method.
-    companionInstance match {
-      case withApply: EmptyApply => withApply.apply
-      case _ => throwingConstructor
+    if (hasEmptyConstructor) {
+      // Help type inference to not call the damn method...
+      val ctor: Constructor = clazz.newInstance
+      Some(ctor)
+    } else {
+      None
     }
+  }
+
+  private def getDefaultArgumentNames(m: MethodSymbol) = {
+    //http://stackoverflow.com/questions/16939511/instantiating-a-case-class-with-default-args-via-reflection
+    //    import scala.reflect.runtime.universe
+    //    import scala.reflect.internal.{ Definitions, SymbolTable, StdNames }
+    //
+    //    val ds = universe.asInstanceOf[Definitions with SymbolTable with StdNames]
+
+    // Constructor names are actually the name of the class
+    // but their default argument getters start with <init> as of 2.11.0-M7
+    val prefix =
+      if (m.isConstructor) nme.CONSTRUCTOR
+      else m.name.encoded
+
+    for {
+    // Take all arguments of the first argument list and index them
+      (argument, index) <- m.paramss.head.map(_.asTerm).zipWithIndex
+
+      // Filter out non-default parameters
+      if argument.isParamWithDefault
+
+    // Return a term name using string concatenation. API for getting a default arguments
+    // getter name is not jet public as of 2.11.0-M7
+    } yield TermName(prefix + "$default$" + (index+1))
+  }
+
+  private def constructorWithDefaultArgs(companionSymbol: ModuleSymbol, companionType: Type, classType: Type): Option[Constructor] = {
+    // Start with all possible constructors
+    // Only one constructor can define default arguments
+    // see class A(var a: Int = 42, var b: Int = 12) { def this(aa: Int, bb: String = "Hello") = this(1, 2) }
+    val constructors = classType.declarations.collect {
+      case d if d.isMethod && d.asMethod.isConstructor => d.asMethod
+    }
+
+    // Obtain a mirror for the companion and the class
+    val classMirror = cm.reflectClass(classType.typeSymbol.asClass)
+    val companionMirror = cm.reflect(cm.reflectModule(companionSymbol).instance)
+
+    val possibleConstructors = for {
+      ctor <- constructors
+
+      // Check that there is only one parameter list, as we can only handle that
+      if ctor.paramss.size == 1
+
+      // Get the names of all default argument getters
+      paramsWithDefault = getDefaultArgumentNames(ctor)
+
+      // Cache the declarations for the later search
+      companionDeclarations = companionType.declarations
+
+      // Get the method symbols by searching them in all declarations. Type.declaration(TermName)
+      // does not work, probably because we construct the term name by hand. List.find returns
+      // an Option, so we flatMap the result to get a plain list and not a List[Option].
+      defaultGetters = paramsWithDefault.flatMap {
+        p => companionDeclarations.find(_.name.encoded == paramsWithDefault.head.encoded)
+      }
+
+      // Only proceede if all arguments have a default
+      if defaultGetters.size == ctor.paramss.head.size
+
+      // Reflect the constructor and the default argument getters
+      reflectedCtor = classMirror.reflectConstructor(ctor)
+      reflectedGetters = defaultGetters.map(dg => companionMirror.reflectMethod(dg.asMethod))
+    } // Yield a method, that evaluates the default getters and calls the constructor with the results
+    yield () => {
+        // Getter must always be lazy evaluated
+        val defaults = reflectedGetters.map(_.apply())
+
+        reflectedCtor.apply(defaults: _*)
+      }
+
+    // Take the first constructor, there should be at most one
+    possibleConstructors.headOption
+  }
+
+  private def emptyApply(companionSymbol: ModuleSymbol, companionType: Type): Option[Constructor] = {
+    companionType.declarations.collectFirst {
+      case d
+        if d.isMethod &&
+          d.asMethod.paramss == List(List()) &&
+          d.asMethod.name.decoded == "apply" =>
+
+        val apply = d.asMethod
+
+        // Obtain a mirror for the companion
+        val companionMirror = cm.reflect(cm.reflectModule(companionSymbol).instance)
+
+        val reflectedApply = companionMirror.reflectMethod(apply)
+
+        () => reflectedApply.apply()
+    }
+  }
+
+  private def applyWithDefaultArgs(companionSymbol: ModuleSymbol, companionType: Type, classType: Type): Option[Constructor] = {
+    // Start with all possible apply methods
+    // Only one apply can define default arguments.
+    val applies = companionType.declarations.collect {
+      case d if d.isMethod && d.asMethod.name.decoded == "apply" => d.asMethod
+    }
+
+    // Obtain a mirror for the companion
+    val companionMirror = cm.reflect(cm.reflectModule(companionSymbol).instance)
+
+    val possibleApplies = for {
+      apply <- applies
+
+      // Check that there is only one parameter list, as we can only handle that
+      if apply.paramss.size == 1
+
+      // Get the names of all default argument getters
+      paramsWithDefault = getDefaultArgumentNames(apply)
+
+      // Cache the declarations for the later search
+      companionDeclarations = companionType.declarations
+
+      // Get the method symbols by searching them in all declarations. Type.declaration(TermName)
+      // does not work, probably because we construct the term name by hand. List.find returns
+      // an Option, so we flatMap the result to get a plain list and not a List[Option].
+      defaultGetters = paramsWithDefault.flatMap {
+        p => companionDeclarations.find(_.name.encoded == paramsWithDefault.head.encoded)
+      }
+
+      // Only proceede if all arguments have a default
+      if defaultGetters.size == apply.paramss.head.size
+
+      // Reflect the apply method and the default argument getters
+      reflectedApply = companionMirror.reflectMethod(apply)
+      reflectedGetters = defaultGetters.map(dg => companionMirror.reflectMethod(dg.asMethod))
+    } // Yield a method, that evaluates the default getters and calls the constructor with the results
+    yield () => {
+        // Getter must always be lazy evaluated
+        val defaults = reflectedGetters.map(_.apply())
+
+        reflectedApply.apply(defaults: _*)
+      }
+
+    // Take the first apply method, there should be at most one
+    possibleApplies.headOption
   }
 }
 

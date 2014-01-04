@@ -19,7 +19,7 @@ package org.msgpack
 
 import `type`.Value
 import conversion.ValueConversions
-import scalautil.MyParameterizedType
+import scalautil.ScalaSigUtil
 import template._
 import java.io.InputStream
 
@@ -67,16 +67,15 @@ trait ScalaMessagePackWrapper {
 
   def messagePack: MessagePack
 
-  def write(obj: Any): Array[Byte] = {
-    messagePack.write(obj)
-  }
+  def write[T: TypeTag](obj: T): Array[Byte] = {
+    val tpe = typeOf[T]
 
-  /**
-   * This is synonym for write.
-   * You use this method when "write" name conflicts using field importing
-   */
-  def pack(obj: Any): Array[Byte] = {
-    messagePack.write(obj)
+    if (tpe.typeSymbol.asClass.typeParams.size > 0) {
+      val t = messagePack.lookup(ScalaSigUtil.javaClass[T])
+      messagePack.write(obj, t.asInstanceOf[Template[T]])
+    } else {
+      messagePack.write(obj)
+    }
   }
 
   def writeT[T](obj: T)(implicit template: Template[T]): Array[Byte] = {
@@ -91,7 +90,7 @@ trait ScalaMessagePackWrapper {
     val tpe = typeOf[T]
 
     if (tpe.typeSymbol.asClass.typeParams.size > 0) {
-      val t = messagePack.lookup(MyParameterizedType[T]())
+      val t = messagePack.lookup(ScalaSigUtil.javaClass[T])
       messagePack.read(data, t).asInstanceOf[T]
     } else {
       messagePack.read(data, cm.runtimeClass(tpe)).asInstanceOf[T]
@@ -102,25 +101,11 @@ trait ScalaMessagePackWrapper {
     val tpe = typeOf[T]
 
     if (tpe.typeSymbol.asClass.typeParams.size > 0) {
-      val t = messagePack.lookup(MyParameterizedType[T]())
+      val t = messagePack.lookup(ScalaSigUtil.javaClass[T])
       messagePack.read(data, t).asInstanceOf[T]
     } else {
       messagePack.read(data, cm.runtimeClass(tpe)).asInstanceOf[T]
     }
-  }
-
-  /**
-   * This is synonym for read.
-   */
-  def unpack[T: TypeTag](data: Array[Byte]): T = {
-    read(data)
-  }
-
-  /**
-   * This is synonym for read.
-   */
-  def unpack[T: TypeTag](data: InputStream): T = {
-    read(data)
   }
 
   def readTo[T](data: Array[Byte], obj: T): T = {
